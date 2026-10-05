@@ -48,7 +48,7 @@ impl ControlProcessor for MpeInstrument {
         out_buffer: &mut [InstrumentEvent],
     ) -> Result<usize, ProcessorError> {
         match event {
-            SensorEvent::Touch { id, force } => {
+            SensorEvent::Touch { id, x, y: _, force } => {
                 if out_buffer.len() < 2 {
                     return Err(ProcessorError::BufferTooSmall);
                 }
@@ -63,7 +63,10 @@ impl ControlProcessor for MpeInstrument {
 
                 let index = assigned_index.ok_or(ProcessorError::VoiceStealingFailed)?;
                 let channel = Channel::new(index as u8 + 1);
-                let base_note = U7::new(60); // Default middle C
+
+                // We use the initial X coordinate as the base MIDI Note (0-127).
+                // The hardware abstraction layer (HAL) will be responsible for scaling physical position to a base note.
+                let base_note = U7::new(x);
 
                 self.voices[index] = Some(ActiveVoice {
                     touch_id: id,

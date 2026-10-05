@@ -1,19 +1,87 @@
-events:
-  - !Touch
-    id: 1
-    force: 100
-  - !Position
-    id: 1
-    x: 255
-    y: 127
-  - !Touch
-    id: 2
-    force: 127
-  - !Position
-    id: 2
-    x: 0
-    y: 0
-  - !Released
-    id: 1
-  - !Released
-    id: 2
+# L'Ode à la Joie (Beethoven) - Domaine Public
+# E E F G | G F E D | C C D E | E (pointée) D (croche) D (blanche)
+# E=64, F=65, G=67, D=62, C=60
+# BPM = 120 (1 temps = 500ms)
+actions:
+  # --- MESURE 1 ---
+  # E
+  - event: !Touch { id: 1, x: 64, y: 0, force: 100 }
+  - wait_ms: 450
+  - event: !Released { id: 1 }
+  - wait_ms: 50
+  # E
+  - event: !Touch { id: 2, x: 64, y: 0, force: 100 }
+  - wait_ms: 450
+  - event: !Released { id: 2 }
+  - wait_ms: 50
+  # F
+  - event: !Touch { id: 3, x: 65, y: 0, force: 100 }
+  - wait_ms: 450
+  - event: !Released { id: 3 }
+  - wait_ms: 50
+  # G
+  - event: !Touch { id: 4, x: 67, y: 0, force: 100 }
+  - wait_ms: 450
+  - event: !Released { id: 4 }
+  - wait_ms: 50
+
+  # --- MESURE 2 ---
+  # G
+  - event: !Touch { id: 5, x: 67, y: 0, force: 100 }
+  - wait_ms: 450
+  - event: !Released { id: 5 }
+  - wait_ms: 50
+  # F
+  - event: !Touch { id: 6, x: 65, y: 0, force: 100 }
+  - wait_ms: 450
+  - event: !Released { id: 6 }
+  - wait_ms: 50
+  # E
+  - event: !Touch { id: 7, x: 64, y: 0, force: 100 }
+  - wait_ms: 450
+  - event: !Released { id: 7 }
+  - wait_ms: 50
+  # D
+  - event: !Touch { id: 8, x: 62, y: 0, force: 100 }
+  - wait_ms: 450
+  - event: !Released { id: 8 }
+  - wait_ms: 50
+
+  # --- MESURE 3 ---
+  # C
+  - event: !Touch { id: 9, x: 60, y: 0, force: 100 }
+  - wait_ms: 450
+  - event: !Released { id: 9 }
+  - wait_ms: 50
+  # C
+  - event: !Touch { id: 10, x: 60, y: 0, force: 100 }
+  - wait_ms: 450
+  - event: !Released { id: 10 }
+  - wait_ms: 50
+  # D
+  - event: !Touch { id: 11, x: 62, y: 0, force: 100 }
+  - wait_ms: 450
+  - event: !Released { id: 11 }
+  - wait_ms: 50
+  # E
+  - event: !Touch { id: 12, x: 64, y: 0, force: 100 }
+  - wait_ms: 450
+  - event: !Released { id: 12 }
+  - wait_ms: 50
+
+  # --- MESURE 4 ---
+  # E (Noire pointée = 1.5 temps = 750ms)
+  - event: !Touch { id: 13, x: 64, y: 0, force: 100 }
+  - wait_ms: 700
+  - event: !Released { id: 13 }
+  - wait_ms: 50
+  # D (Croche = 0.5 temps = 250ms)
+  - event: !Touch { id: 14, x: 62, y: 0, force: 100 }
+  - wait_ms: 200
+  - event: !Released { id: 14 }
+  - wait_ms: 50
+  # D (Blanche = 2 temps = 1000ms)
+  - event: !Touch { id: 15, x: 62, y: 0, force: 100 }
+  - wait_ms: 950
+  - event: !Released { id: 15 }
+  - wait_ms: 50
