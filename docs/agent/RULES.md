@@ -9,6 +9,7 @@
 - **Conventional Commits:** ALL commit messages MUST follow the Conventional Commits specification.
 - **State Persistence:** Agent management files (in `docs/agent/` and `AGENTS.md`) ARE part of the repository and MUST be committed.
 - **Pre-commit Checks (MANDATORY):** Before ANY commit, you MUST run `cargo fmt --all` and `cargo clippy --workspace -- -D warnings`. No warnings or formatting errors are allowed. You CANNOT commit if there are any warnings.
+- **Git Hook:** A `.git/hooks/pre-commit` script is installed and active. It will automatically reject any commit if formatting or clippy fails. Always fix them before committing.
 
 ## 3. Architecture Rules
 - **Core `no_std`:** The `expressive-core` crate MUST remain strictly `#![no_std]`. No hardware-specific dependencies are allowed in this crate.
