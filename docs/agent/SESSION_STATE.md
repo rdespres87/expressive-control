@@ -1,22 +1,22 @@
 # Session State
 
 ## Status
-READY_FOR_AGENT
+IN_PROGRESS
 
 ## Milestone
-V0.4 PC Simulator & Core Verification
+V0.5 Embedded HAL Implementation
 
 ## Current task
-None active.
+Implement USB MIDI interface for nRF5340.
 
 ## Last completed
-- Implementation of the `simulator` crate.
-- Added `serde` with `no_std` support to `expressive-core`.
-- Created a YAML scenario loader to feed mock MPE `SensorEvent`s into the core `ControlProcessor`.
-- Successfully verified zero-allocation MPE channel distribution and accurate MIDI 1.0 Hex serialization end-to-end.
+- Fixed CI workspace resolution issues by excluding firmware from the main `Cargo.toml` members.
+- Configured `.gitignore` to prevent tracking of firmware `target/` directories and purged git history.
+- Scaffolded `firmwares/nrf5340` with `embassy-nrf` using the correct Cortex-M33 TrustZone Secure feature (`nrf5340-app-s`).
+- Validated cross-compilation with `cargo clippy --target thumbv8m.main-none-eabihf`.
 
 ## Next action
-Begin transitioning to embedded firmware development. We need to implement the hardware abstraction layer (HAL) in `firmwares/nrf5340` that initializes the Zephyr/Embassy runtime and connects actual hardware peripherals (I2C/SPI for the sensors, USB for the MIDI transport) to our `expressive-core`.
+Write the USB MIDI Class descriptors using `embassy-usb` in `firmwares/nrf5340/src/main.rs` to expose the virtual MIDI port over the nRF5340's USB connection.
 
 ## Verification
 - cargo fmt --check: OK

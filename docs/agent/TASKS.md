@@ -11,6 +11,8 @@
 - [x] Implement `ControlProcessor` internal routing logic (mapping events to MPE channels)
 - [x] Implement raw MIDI byte serialization in `expressive-core`
 - [x] Implement a basic PC Simulator driver for end-to-end testing (YAML scenario -> processor -> MIDI hex dump)
+- [x] Scaffold Embassy nRF5340 App Core firmware with TrustZone secure feature (`nrf5340-app-s`) and fix workspace CI conflicts.
 
 ## Pending
-- [ ] Implement hardware HAL for nRF5340 (I2C/SPI sensors -> processor -> USB MIDI)
+- [ ] Implement USB MIDI Class Compliant transport for nRF5340 (`embassy-usb`)
+- [ ] Implement I2C/SPI sensor reader for nRF5340 (`embassy-nrf`)
