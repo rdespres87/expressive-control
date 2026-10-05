@@ -10,7 +10,7 @@
 - [x] Design MPE Voice Allocator and `ControlProcessor` trait interfaces
 - [x] Implement `ControlProcessor` internal routing logic (mapping events to MPE channels)
 - [x] Implement raw MIDI byte serialization in `expressive-core`
+- [x] Implement a basic PC Simulator driver for end-to-end testing (YAML scenario -> processor -> MIDI hex dump)
 
 ## Pending
-- [ ] Implement a basic PC Simulator driver for end-to-end testing (CLI event reader -> processor -> MIDI dump)
 - [ ] Implement hardware HAL for nRF5340 (I2C/SPI sensors -> processor -> USB MIDI)

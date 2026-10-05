@@ -4,18 +4,19 @@
 READY_FOR_AGENT
 
 ## Milestone
-V0.3 Full Core Logic Complete
+V0.4 PC Simulator & Core Verification
 
 ## Current task
 None active.
 
 ## Last completed
-- Implementation of the `ToMidi` trait and `MidiMessage` struct.
-- Safe, `no_std` zero-allocation MIDI 1.0 byte serialization.
-- Hardened bitwise math and data masking to guarantee MIDI protocol compliance.
+- Implementation of the `simulator` crate.
+- Added `serde` with `no_std` support to `expressive-core`.
+- Created a YAML scenario loader to feed mock MPE `SensorEvent`s into the core `ControlProcessor`.
+- Successfully verified zero-allocation MPE channel distribution and accurate MIDI 1.0 Hex serialization end-to-end.
 
 ## Next action
-Implement the `simulator` crate. It should parse mock sensor events from a file or terminal, feed them to `MpeInstrument::process_event`, and dump the resulting raw MIDI bytes to the standard output.
+Begin transitioning to embedded firmware development. We need to implement the hardware abstraction layer (HAL) in `firmwares/nrf5340` that initializes the Zephyr/Embassy runtime and connects actual hardware peripherals (I2C/SPI for the sensors, USB for the MIDI transport) to our `expressive-core`.
 
 ## Verification
 - cargo fmt --check: OK
