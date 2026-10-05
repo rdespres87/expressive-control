@@ -1,13 +1,10 @@
 # Handoff
 
 ## Context
-We just designed the `ControlProcessor` trait and the `MpeInstrument` state for MPE voice allocation. It uses an `[Option<ActiveVoice>; 15]` array to track active touches without dynamic memory allocation or redundant channel data.
+The MPE `ControlProcessor` routing logic is fully implemented and tested by the Inquisitor. We have a robust `no_std` state machine that successfully translates `SensorEvent`s into semantic `InstrumentEvent`s with accurate 14-bit pitch bend math.
 
 ## Next Action
-Implement the logic inside `MpeInstrument::process_event`. This involves:
-- Voice Stealing / Allocation: Finding a free `None` slot for new `Touch` events.
-- Routing: Finding the matching `touch_id` for incoming `Position` or `Released` events.
-- Generating the appropriate `InstrumentEvent`s into the output buffer.
+The next logical step is to write a MIDI serializer in `expressive-core`. This module should take an `InstrumentEvent` (e.g., `NoteOn`, `PitchBend`) and format it into standard MIDI 1.0 byte sequences (e.g., `[0x90, 0x3C, 0x7F]`) so it can be forwarded to the `MidiTransport` interface.
 
 ## Verification
 The workspace is green, CI is configured and passing.

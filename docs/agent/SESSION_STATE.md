@@ -4,20 +4,18 @@
 READY_FOR_AGENT
 
 ## Milestone
-V0.1 Foundation / agent-ready architecture.
+V0.2 Core Routing Engine
 
 ## Current task
 None active.
 
 ## Last completed
-- Cargo workspace initialization
-- English translation of documentation
-- GitHub Actions CI setup
-- Implementation of foundational traits (`SensorReader`, `MidiTransport`, `SensorEvent`, `InstrumentEvent`).
-- Design of the MPE Voice Allocator state (`Option<ActiveVoice>`) and `ControlProcessor` trait.
+- Implementation of the internal routing logic of `MpeInstrument::process_event`.
+- Handled voice stealing, note-on/off events, and precision 8-bit to 14-bit MPE scaling for pitch bend.
+- Strict buffering and compiler optimizations.
 
 ## Next action
-Implement the internal routing logic of `MpeInstrument::process_event` (mapping `SensorEvent`s to the tracked MPE voices and generating `InstrumentEvent`s).
+Implement raw MIDI byte serialization logic in `expressive-core` to convert `InstrumentEvent`s into raw byte arrays that can be passed to the `MidiTransport`.
 
 ## Verification
 - cargo fmt --check: OK

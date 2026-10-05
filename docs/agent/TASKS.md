@@ -8,9 +8,9 @@
 - [x] GitHub Actions CI setup
 - [x] Define core foundation traits (SensorReader, MidiTransport, SensorEvent, InstrumentEvent)
 - [x] Design MPE Voice Allocator and `ControlProcessor` trait interfaces
+- [x] Implement `ControlProcessor` internal routing logic (mapping events to MPE channels)
 
 ## Pending
-- [ ] Implement `ControlProcessor` internal routing logic (mapping events to MPE channels)
 - [ ] Implement raw MIDI byte serialization in `expressive-core`
 - [ ] Implement a basic PC Simulator driver for end-to-end testing
 - [ ] Implement hardware HAL for nRF5340
