@@ -8,3 +8,5 @@ expressive-core = { path = "../core" }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 midir = "0.9"
+serialport = "4.3.0"
+postcard = { version = "1.0.8", features = ["use-std"] }

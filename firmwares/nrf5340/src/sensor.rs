@@ -1,4 +1,4 @@
-use embassy_nrf::twim::{self, Twim, Instance};
+use embassy_nrf::twim::{self, Twim};
 use expressive_core::{PollStatus, SensorError, SensorEvent, SensorReader};
 
 pub struct I2cSensor<'d> {
@@ -15,9 +15,9 @@ impl<'d> I2cSensor<'d> {
 impl<'d> SensorReader for I2cSensor<'d> {
     fn poll_events(&mut self, buffer: &mut [SensorEvent]) -> Result<PollStatus, SensorError> {
         let mut data = [0u8; 8];
-        
-        // Blocking read for simplicity in the polling model. 
-        // Note: For real async use, SensorReader trait might need to become async 
+
+        // Blocking read for simplicity in the polling model.
+        // Note: For real async use, SensorReader trait might need to become async
         // or we use non-blocking methods.
         match self.i2c.blocking_read(self.address, &mut data) {
             Ok(_) => {
@@ -31,9 +31,15 @@ impl<'d> SensorReader for I2cSensor<'d> {
                         y: data[1],
                         force: data[2],
                     };
-                    Ok(PollStatus { count: 1, more_pending: false })
+                    Ok(PollStatus {
+                        count: 1,
+                        more_pending: false,
+                    })
                 } else {
-                    Ok(PollStatus { count: 0, more_pending: true })
+                    Ok(PollStatus {
+                        count: 0,
+                        more_pending: true,
+                    })
                 }
             }
             Err(twim::Error::TxBufferTooLong) | Err(twim::Error::RxBufferTooLong) => {
