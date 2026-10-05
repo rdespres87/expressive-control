@@ -1,5 +1,7 @@
 #![no_std]
 
+pub mod processor;
+
 // --- Type Safety Wrappers ---
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
