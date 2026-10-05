@@ -9,8 +9,8 @@
 - [x] Define core foundation traits (SensorReader, MidiTransport, SensorEvent, InstrumentEvent)
 - [x] Design MPE Voice Allocator and `ControlProcessor` trait interfaces
 - [x] Implement `ControlProcessor` internal routing logic (mapping events to MPE channels)
+- [x] Implement raw MIDI byte serialization in `expressive-core`
 
 ## Pending
-- [ ] Implement raw MIDI byte serialization in `expressive-core`
-- [ ] Implement a basic PC Simulator driver for end-to-end testing
-- [ ] Implement hardware HAL for nRF5340
+- [ ] Implement a basic PC Simulator driver for end-to-end testing (CLI event reader -> processor -> MIDI dump)
+- [ ] Implement hardware HAL for nRF5340 (I2C/SPI sensors -> processor -> USB MIDI)
