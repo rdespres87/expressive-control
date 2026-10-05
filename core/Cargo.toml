@@ -6,3 +6,4 @@ description = "Generic no_std MPE MIDI controller framework"
 license = "MIT"
 
 [dependencies]
+serde = { version = "1.0", default-features = false, features = ["derive"] }

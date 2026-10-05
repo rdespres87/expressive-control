@@ -1,0 +1,19 @@
+events:
+  - !Touch
+    id: 1
+    force: 100
+  - !Position
+    id: 1
+    x: 255
+    y: 127
+  - !Touch
+    id: 2
+    force: 127
+  - !Position
+    id: 2
+    x: 0
+    y: 0
+  - !Released
+    id: 1
+  - !Released
+    id: 2

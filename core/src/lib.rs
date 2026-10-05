@@ -41,7 +41,7 @@ impl Channel {
 
 // --- Events ---
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum SensorEvent {
     Touch { id: u16, force: u8 },
     Position { id: u16, x: u8, y: u8 },
