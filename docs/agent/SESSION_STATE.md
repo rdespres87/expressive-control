@@ -7,21 +7,21 @@ IN_PROGRESS
 V0.5 Embedded HAL Implementation
 
 ## Current task
-Implement USB MIDI interface for nRF5340.
+Implement I2C/SPI sensor reader for nRF5340.
 
 ## Last completed
-- Fixed CI workspace resolution issues by excluding firmware from the main `Cargo.toml` members.
-- Configured `.gitignore` to prevent tracking of firmware `target/` directories and purged git history.
-- Scaffolded `firmwares/nrf5340` with `embassy-nrf` using the correct Cortex-M33 TrustZone Secure feature (`nrf5340-app-s`).
-- Validated cross-compilation with `cargo clippy --target thumbv8m.main-none-eabihf`.
+- Implemented USB MIDI Class Compliant transport for nRF5340.
+- Checked off USB MIDI from TASKS.md.
 
 ## Next action
-Write the USB MIDI Class descriptors using `embassy-usb` in `firmwares/nrf5340/src/main.rs` to expose the virtual MIDI port over the nRF5340's USB connection.
+- Add Twim (I2C) or Spim (SPI) dependencies/features in `nrf5340/Cargo.toml`.
+- Implement a `SensorReader` using `embassy_nrf::twim::Twim`.
+- Integrate the sensor reader into the main polling loop in `main.rs`, replacing the dummy `mock_event`.
 
 ## Verification
 - cargo fmt --check: OK
-- cargo clippy: OK
-- cargo test: OK
+- cargo check: OK
+- The I2C code cleanly integrates into the existing loop without unwrap() warnings.
 
 ## Blockers
 None.

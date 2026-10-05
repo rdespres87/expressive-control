@@ -14,5 +14,5 @@
 - [x] Scaffold Embassy nRF5340 App Core firmware with TrustZone secure feature (`nrf5340-app-s`) and fix workspace CI conflicts.
 
 ## Pending
-- [ ] Implement USB MIDI Class Compliant transport for nRF5340 (`embassy-usb`)
-- [ ] Implement I2C/SPI sensor reader for nRF5340 (`embassy-nrf`)
+- [x] Implement USB MIDI Class Compliant transport for nRF5340 (`embassy-usb`)
+- [x] Implement I2C/SPI sensor reader for nRF5340 (`embassy-nrf`)
