@@ -1,4 +1,4 @@
-use crate::{InstrumentEvent, SensorEvent, U7};
+use crate::{Channel, InstrumentEvent, SensorEvent, U14, U7};
 
 /// Represents a currently active MPE touch.
 /// Note: The MPE channel is deliberately excluded to save memory.
@@ -28,9 +28,6 @@ pub trait ControlProcessor {
 }
 
 pub struct MpeInstrument {
-    /// Fixed array of 15 voices (for MPE channels 2 through 16).
-    /// Using Option<T> leverages Rust's niche optimization and prevents
-    /// accidental reads of inactive state variables.
     pub voices: [Option<ActiveVoice>; 15],
     pub pitch_bend_range: u8,
 }
@@ -47,10 +44,98 @@ impl Default for MpeInstrument {
 impl ControlProcessor for MpeInstrument {
     fn process_event(
         &mut self,
-        _event: SensorEvent,
-        _out_buffer: &mut [InstrumentEvent],
+        event: SensorEvent,
+        out_buffer: &mut [InstrumentEvent],
     ) -> Result<usize, ProcessorError> {
-        // Implementation logic will be added here
-        Ok(0)
+        match event {
+            SensorEvent::Touch { id, force } => {
+                if out_buffer.len() < 2 {
+                    return Err(ProcessorError::BufferTooSmall);
+                }
+
+                let mut assigned_index = None;
+                for i in 0..15 {
+                    if self.voices[i].is_none() {
+                        assigned_index = Some(i);
+                        break;
+                    }
+                }
+
+                let index = assigned_index.ok_or(ProcessorError::VoiceStealingFailed)?;
+                let channel = Channel::new(index as u8 + 1);
+                let base_note = U7::new(60); // Default middle C
+
+                self.voices[index] = Some(ActiveVoice {
+                    touch_id: id,
+                    base_note,
+                });
+
+                out_buffer[0] = InstrumentEvent::NoteOn {
+                    channel,
+                    note: base_note,
+                    velocity: U7::new(force >> 1),
+                };
+                out_buffer[1] = InstrumentEvent::ChannelPressure {
+                    channel,
+                    pressure: U7::new(force >> 1),
+                };
+
+                Ok(2)
+            }
+            SensorEvent::Position { id, x, y } => {
+                if out_buffer.len() < 2 {
+                    return Err(ProcessorError::BufferTooSmall);
+                }
+
+                if let Some(index) = self
+                    .voices
+                    .iter()
+                    .position(|v| v.is_some_and(|active| active.touch_id == id))
+                {
+                    let channel = Channel::new(index as u8 + 1);
+
+                    // Precise 8-bit to 14-bit scaling:
+                    // x << 6 maps the top 8 bits. We fill the lower 6 bits with the top 6 bits of x.
+                    let scaled_bend = ((x as u16) << 6) | ((x as u16) >> 2);
+
+                    out_buffer[0] = InstrumentEvent::PitchBend {
+                        channel,
+                        bend: U14::new(scaled_bend),
+                    };
+                    out_buffer[1] = InstrumentEvent::Timbre {
+                        channel,
+                        value: U7::new(y >> 1),
+                    };
+                    Ok(2)
+                } else {
+                    Ok(0)
+                }
+            }
+            SensorEvent::Released { id } => {
+                if out_buffer.is_empty() {
+                    return Err(ProcessorError::BufferTooSmall);
+                }
+
+                if let Some(index) = self
+                    .voices
+                    .iter()
+                    .position(|v| v.is_some_and(|active| active.touch_id == id))
+                {
+                    let channel = Channel::new(index as u8 + 1);
+                    let base_note = self.voices[index].unwrap().base_note;
+
+                    self.voices[index] = None;
+
+                    out_buffer[0] = InstrumentEvent::NoteOff {
+                        channel,
+                        note: base_note,
+                        velocity: U7::new(0),
+                    };
+                    Ok(1)
+                } else {
+                    Ok(0)
+                }
+            }
+        }
     }
 }
