@@ -1,18 +1,10 @@
 # Handoff
 
-## State
-READY_FOR_AGENT
+## Context
+We just completed the foundational architecture of the `expressive-core` crate. The core traits (`SensorReader`, `MidiTransport`) and enums (`SensorEvent`, `InstrumentEvent`) have been designed with strict memory safety using bounds-checked wrappers (`U7`, `U14`, `Channel`). The Inquisitor approved this design.
 
-## Current task
-None.
+## Next Action
+The next logical action is to implement the `ControlProcessor` (or `Instrument`). This component will be responsible for taking `SensorEvent`s, applying MPE zoning rules and response curves, and yielding `InstrumentEvent`s.
 
-## Exact next action
-1. Read `AGENTS.md`.
-2. Read `SESSION_PROTOCOL.md`.
-3. Check `git status` and `git diff`.
-4. Run bootstrap checks.
-5. First fix any existing build/test issues.
-6. Then select the smallest uncompleted task from `TASKS.md`.
-
-## Rule
-Do not start a major feature before having a reliable baseline build.
+## Verification
+The workspace is green, CI is configured and passing.
