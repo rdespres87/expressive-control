@@ -1,0 +1,8 @@
+[package]
+name = "expressive-core"
+version = "0.1.0"
+edition = "2021"
+description = "Generic no_std MPE MIDI controller framework"
+license = "MIT"
+
+[dependencies]
