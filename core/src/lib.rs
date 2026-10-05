@@ -1,5 +1,7 @@
 #![no_std]
 
+pub mod midi;
+
 pub mod processor;
 
 // --- Type Safety Wrappers ---
