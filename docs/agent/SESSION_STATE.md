@@ -14,9 +14,10 @@ None active.
 - English translation of documentation
 - GitHub Actions CI setup
 - Implementation of foundational traits (`SensorReader`, `MidiTransport`, `SensorEvent`, `InstrumentEvent`).
+- Design of the MPE Voice Allocator state (`Option<ActiveVoice>`) and `ControlProcessor` trait.
 
 ## Next action
-Implement the `ControlProcessor` (or `Instrument`) which maps `SensorEvent`s to `InstrumentEvent`s.
+Implement the internal routing logic of `MpeInstrument::process_event` (mapping `SensorEvent`s to the tracked MPE voices and generating `InstrumentEvent`s).
 
 ## Verification
 - cargo fmt --check: OK
