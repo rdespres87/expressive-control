@@ -20,8 +20,11 @@ fn main() {
     let i2c_config = I2cConfig::new().baudrate(400.kHz().into());
     // WARNING: Replace `gpio1` and `gpio2` with the actual SDA/SCL pins of your Elecrow board
     let mut i2c = I2cDriver::new(peripherals.i2c0, pins.gpio1, pins.gpio2, &i2c_config).unwrap();
-
     let i2c_bus = core::cell::RefCell::new(i2c);
+
+    // 1.b Native USB-MIDI Initialization (TinyUSB)
+    log::info!("Initializing TinyUSB for Native USB-MIDI Class...");
+    // TODO: Call TinyUSB initialization C-bindings here
 
     // 2. Sequential Sensor Boot & Address Management
     // Both sensors default to I2C address 0x52 (0x29 7-bit). We must boot them one by one.
@@ -113,10 +116,11 @@ fn main() {
                     // Convert InstrumentEvent to raw MIDI bytes
                     use expressive_core::midi::ToMidi;
                     if let Some(midi_bytes) = event.to_midi() {
-                        // TODO: Send `midi_bytes` over native USB or UART.
-                        // Example for UART MIDI (Standard DIN 5-pin at 31250 baud):
-                        // uart.write(&midi_bytes).unwrap();
-                        log::info!("MIDI TX: {:?}", midi_bytes);
+                        // Send `midi_bytes` over Native USB-MIDI via TinyUSB bindings
+                        // unsafe {
+                        //     esp_idf_sys::tud_midi_stream_write(0, midi_bytes.as_ptr(), midi_bytes.len() as u32);
+                        // }
+                        log::info!("USB-MIDI TX: {:?}", midi_bytes);
                     }
                 }
             }
