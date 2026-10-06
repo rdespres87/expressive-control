@@ -23,8 +23,24 @@ fn main() {
     let i2c_bus = core::cell::RefCell::new(i2c);
 
     // 1.b Native USB-MIDI Initialization (TinyUSB)
+    extern "C" {
+        // Declare TinyUSB MIDI function manually in case esp-idf-sys doesn't export it
+        fn tud_midi_stream_write(cable_num: u8, buffer: *const u8, bufsize: u32) -> u32;
+    }
+
     log::info!("Initializing TinyUSB for Native USB-MIDI Class...");
-    // TODO: Call TinyUSB initialization C-bindings here
+    unsafe {
+        let tusb_cfg = esp_idf_sys::tinyusb_config_t {
+            device_descriptor: core::ptr::null(),
+            string_descriptor: core::ptr::null_mut(),
+            string_descriptor_count: 0,
+            external_phy: false,
+            configuration_descriptor: core::ptr::null(),
+            self_powered: false,
+            vbus_monitor_io: 0,
+        };
+        esp_idf_sys::tinyusb_driver_install(&tusb_cfg);
+    }
 
     // 2. Sequential Sensor Boot & Address Management
     // Both sensors default to I2C address 0x52 (0x29 7-bit). We must boot them one by one.
@@ -117,9 +133,9 @@ fn main() {
                     use expressive_core::midi::ToMidi;
                     if let Some(midi_bytes) = event.to_midi() {
                         // Send `midi_bytes` over Native USB-MIDI via TinyUSB bindings
-                        // unsafe {
-                        //     esp_idf_sys::tud_midi_stream_write(0, midi_bytes.as_ptr(), midi_bytes.len() as u32);
-                        // }
+                        unsafe {
+                            tud_midi_stream_write(0, midi_bytes.as_ptr(), midi_bytes.len() as u32);
+                        }
                         log::info!("USB-MIDI TX: {:?}", midi_bytes);
                     }
                 }

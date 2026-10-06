@@ -24,5 +24,5 @@
 - [x] Initialize new Cargo workspace member `firmwares/expressive-theremin` (`esp-idf` based)
 - [x] Integrate PC Simulator multi-instrument dispatch and HIL theremin scenario
 - [x] Implement VL53L4CD I2C driver with dual-sensor address initialization
-- [x] Implement UART/Hairless MIDI transport for ESP32-S3
+- [x] Implement Native USB-MIDI transport via TinyUSB
 - [ ] Integrate Slint UI interface for the 5" touch display
