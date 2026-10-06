@@ -22,15 +22,24 @@ struct Scenario {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let is_hil = args.len() > 1;
 
-    let yaml_content = fs::read_to_string("simulator/scenario.yml")
-        .expect("Failed to read simulator/scenario.yml");
+    // Find a `.yml` file in arguments, or default to scenario.yml
+    let scenario_path = args
+        .iter()
+        .find(|a| a.ends_with(".yml"))
+        .map(|s| s.as_str())
+        .unwrap_or("simulator/scenario.yml");
+
+    let is_hil = args.iter().any(|a| a.starts_with("/dev/"));
+    let is_theremin = scenario_path.contains("theremin");
+
+    println!("📄 Loading scenario: {}", scenario_path);
+    let yaml_content = fs::read_to_string(scenario_path).expect("Failed to read scenario file");
     let scenario: Scenario = serde_yaml::from_str(&yaml_content).expect("Failed to parse YAML");
 
     if is_hil {
         // HIL MODE
-        let port_name = &args[1];
+        let port_name = args.iter().find(|a| a.starts_with("/dev/")).unwrap();
         println!("🎵 HIL Mode: Opening serial port {}...", port_name);
         let mut port = serialport::new(port_name, 115200)
             .timeout(Duration::from_millis(100))
@@ -76,7 +85,17 @@ fn main() {
         println!("⏳ Starting simulation in 3 seconds...\n");
         sleep(Duration::from_secs(3));
 
-        let mut instrument = MpeInstrument::default();
+        let mut mpe = MpeInstrument::default();
+        let mut theremin = theremin::TofThereminProcessor::default();
+
+        let instrument: &mut dyn ControlProcessor = if is_theremin {
+            println!("🎸 Using Theremin Instrument Logic");
+            &mut theremin
+        } else {
+            println!("🎹 Using MPE Keyboard Logic");
+            &mut mpe
+        };
+
         let dummy_event = InstrumentEvent::NoteOff {
             channel: Channel::new(0),
             note: U7::new(0),

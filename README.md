@@ -18,10 +18,11 @@ See:
 ## Current Capabilities
 
 - **Core (`no_std`)**: Hardware-agnostic logic for translating sensor events into MPE MIDI events.
-- **PC Simulator**: Reads sensor events from `simulator/scenario.yml`, processes them through the Core, and outputs MPE MIDI to a virtual MIDI port named "Expressive MPE Out" (macOS/Linux) that you can connect to your DAW.
-- **Firmware (nRF5340)**: 
-  - **Standard mode**: Polls an I2C sensor and outputs MIDI over USB.
-  - **HIL (Hardware-In-the-Loop) mode**: Receives mocked sensor events from the PC simulator over UART (via Postcard/COBS) and processes them on the real hardware, outputting MIDI over USB.
+- **Instruments (`no_std`)**: Reusable hardware-agnostic logic for specific instrument topologies (e.g., `instruments/theremin`).
+- **PC Simulator**: Reads sensor events from YAML scenarios (`scenario.yml`, `theremin_scenario.yml`), processes them through the Core/Instruments, and outputs MPE MIDI to a virtual MIDI port named "Expressive MPE Out" (macOS/Linux) that you can connect to your DAW.
+- **Firmwares**: 
+  - **nRF5340 (MPE Keyboard)**: Polls an I2C sensor array and outputs MIDI over USB. Supports HIL (Hardware-In-the-Loop) mode by receiving mocked sensor events from the PC simulator over UART.
+  - **ESP32-S3 (ToF Theremin)**: *[WIP]* An `esp-idf` based firmware using VL53L5CX Time-of-Flight sensors mapped to pitch and volume, featuring a Slint UI on an Elecrow 5.0" Display.
 
 ## Commands
 
@@ -48,6 +49,14 @@ cargo run
 
 # Run the HIL firmware (UART injection -> USB MIDI)
 cargo run --features hil
+```
+
+### Firmware (ESP32-S3 Theremin)
+*Requires the `esp` rust toolchain (via `espup`).*
+
+```bash
+cd firmwares/expressive-theremin
+cargo build
 ```
 
 ### Hardware-In-the-Loop (HIL)

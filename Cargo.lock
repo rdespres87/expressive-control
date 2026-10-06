@@ -475,6 +475,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "serialport",
+ "theremin",
 ]
 
 [[package]]

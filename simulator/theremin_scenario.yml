@@ -1,0 +1,29 @@
+# Theremin Simulation Scenario
+# Demonstrates 3D spatial gestures mapped to MIDI.
+
+actions:
+  # Approach Right Hand (Pitch drops from high to low)
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 400 }
+  - wait_ms: 50
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 300 }
+  - wait_ms: 50
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 200 }
+  - wait_ms: 50
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 100 }
+  - wait_ms: 500
+
+  # Approach Left Hand (Volume increases)
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 400 }
+  - wait_ms: 50
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 300 }
+  - wait_ms: 50
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 200 }
+  - wait_ms: 50
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 50 }
+  - wait_ms: 1000
+
+  # Withdraw Left Hand (Volume drops)
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 200 }
+  - wait_ms: 50
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 500 }
+  - wait_ms: 500

@@ -11,6 +11,7 @@
 - **Pre-commit Checks (MANDATORY):** Before ANY commit, you MUST run `cargo fmt --all` and `cargo clippy --workspace -- -D warnings`. No warnings or formatting errors are allowed. You CANNOT commit if there are any warnings.
 - **Git Hook:** A `.git/hooks/pre-commit` script is installed and active. It will automatically reject any commit if formatting or clippy fails. Always fix them before committing.
 - **Synchronized Commits:** You MUST ensure that any changes to agent tracking files (`TASKS.md`, `SESSION_STATE.md`, `HANDOFF.md`) are committed and pushed together with the code changes they represent. NEVER declare a task finished or emit `SESSION_HANDOFF_REQUIRED` if tracking files have uncommitted modifications.
+- **README Maintenance:** You MUST proactively update the `README.md` file whenever a new architectural component (e.g., a new workspace member, new instrument, or new firmware) is added or when major features are completed.
 
 ## 3. Architecture Rules
 - **Core `no_std`:** The `expressive-core` crate MUST remain strictly `#![no_std]`. No hardware-specific dependencies are allowed in this crate.
