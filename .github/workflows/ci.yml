@@ -67,7 +67,7 @@ jobs:
           ldproxy: true
 
       - name: Check ESP32-S3 Firmware
-        run: cargo clippy -p expressive-theremin -- -D warnings
+        run: cd firmwares/expressive-theremin && cargo clippy -- -D warnings
 
       - name: Build ESP32-S3 Firmware
-        run: cargo build -p expressive-theremin --release
+        run: cd firmwares/expressive-theremin && cargo build --release
