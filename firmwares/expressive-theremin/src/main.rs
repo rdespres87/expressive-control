@@ -103,9 +103,21 @@ fn main() {
                 y: 0,
                 z: distance_right,
             };
+            
+            // Process the distance into MIDI events
             if let Ok(count) = processor.process_event(event_pitch, &mut out_buffer) {
                 for i in 0..count {
-                    log::info!("MIDI Pitch Event: {:?}", out_buffer[i]);
+                    let event = out_buffer[i];
+                    log::info!("Generated Event: {:?}", event);
+                    
+                    // Convert InstrumentEvent to raw MIDI bytes
+                    use expressive_core::midi::ToMidi;
+                    if let Some(midi_bytes) = event.to_midi() {
+                        // TODO: Send `midi_bytes` over native USB or UART.
+                        // Example for UART MIDI (Standard DIN 5-pin at 31250 baud):
+                        // uart.write(&midi_bytes).unwrap();
+                        log::info!("MIDI TX: {:?}", midi_bytes);
+                    }
                 }
             }
 
