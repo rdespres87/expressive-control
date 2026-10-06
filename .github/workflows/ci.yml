@@ -49,3 +49,25 @@ jobs:
       - name: Check Core for nRF5340 (Cortex-M33)
         # This checks that expressive-core successfully compiles without the standard library
         run: cargo check -p expressive-core --target thumbv8m.main-none-eabihf
+
+  build-firmware-esp32:
+    name: Build Firmware (ESP32-S3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ESP-IDF Dependencies
+        run: sudo apt-get update && sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+
+      - name: Setup Rust ESP Toolchain
+        uses: esp-rs/xtensa-toolchain@v1.5
+        with:
+          default: true
+          buildtargets: esp32s3
+          ldproxy: true
+
+      - name: Check ESP32-S3 Firmware
+        run: cargo clippy -p expressive-theremin -- -D warnings
+
+      - name: Build ESP32-S3 Firmware
+        run: cargo build -p expressive-theremin --release
