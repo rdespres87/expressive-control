@@ -69,6 +69,11 @@ fn main() {
         velocity: expressive_core::U7::new(0),
     }; 10];
 
+    // Configure sensors for ultra-fast mode: 100 Hz (10ms timing budget)
+    // This provides the lowest latency possible for a musical instrument.
+    sensor_pitch.set_timing_budget(core::time::Duration::from_millis(10)).unwrap();
+    sensor_vol.set_timing_budget(core::time::Duration::from_millis(10)).unwrap();
+
     // Start continuous ranging
     sensor_pitch.start_ranging().unwrap();
     sensor_vol.start_ranging().unwrap();
