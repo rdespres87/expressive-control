@@ -20,8 +20,9 @@
 ## ToF Theremin Project (ESP32-S3)
 - [x] Hardware feasibility study and component selection (ESP32-S3, VL53L5CX, Slint UI)
 - [x] Add `SensorEvent::Position3D` definitions to `expressive-core`
-- [x] Implement `TofThereminProcessor` logic in `expressive-core`
-- [ ] Initialize new Cargo workspace member `firmwares/expressive-theremin` (`esp-idf` based)
+- [x] Implement `TofThereminProcessor` logic in `instruments/theremin`
+- [x] Initialize new Cargo workspace member `firmwares/expressive-theremin` (`esp-idf` based)
+- [x] Integrate PC Simulator multi-instrument dispatch and HIL theremin scenario
 - [ ] Implement VL53L5CX I2C driver with dual-sensor address initialization
 - [ ] Implement USB-MIDI transport for ESP32-S3
 - [ ] Integrate Slint UI interface for the 5" touch display

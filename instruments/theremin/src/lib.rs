@@ -18,8 +18,8 @@ pub struct TofThereminProcessor {
 impl Default for TofThereminProcessor {
     fn default() -> Self {
         Self {
-            min_distance_mm: 50,
-            max_distance_mm: 500,
+            min_distance_mm: 20,
+            max_distance_mm: 1000,
             base_note: U7::new(60), // Middle C
             pitch_bend_range_semitones: 24,
             is_playing: false,
