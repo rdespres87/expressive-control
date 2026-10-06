@@ -19,10 +19,43 @@ fn main() {
     // 1. I2C Initialization
     let i2c_config = I2cConfig::new().baudrate(400.kHz().into());
     // WARNING: Replace `gpio1` and `gpio2` with the actual SDA/SCL pins of your Elecrow board
-    let _i2c = I2cDriver::new(peripherals.i2c0, pins.gpio1, pins.gpio2, &i2c_config).unwrap();
-    // TODO: Initialize VL53L5CX sensors using `_i2c`
+    let mut i2c = I2cDriver::new(peripherals.i2c0, pins.gpio1, pins.gpio2, &i2c_config).unwrap();
 
-    // 2. Hardware Interrupt Pins (INT)
+    let i2c_bus = core::cell::RefCell::new(i2c);
+
+    // 2. Sequential Sensor Boot & Address Management
+    // Both sensors default to I2C address 0x52 (0x29 7-bit). We must boot them one by one.
+    log::info!("Starting sequential sensor boot...");
+    let mut xshut_pitch = PinDriver::output(pins.gpio6).unwrap();
+    let mut xshut_volume = PinDriver::output(pins.gpio7).unwrap();
+    
+    // Put both in reset (LOW)
+    xshut_pitch.set_low().unwrap();
+    xshut_volume.set_low().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(10));
+
+    // A. Boot Left Sensor (Volume)
+    log::info!("Booting Volume Sensor...");
+    xshut_volume.set_high().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(50)); // Wait for boot
+    
+    // Initialize sensor at default address and change it to 0x2A
+    let mut sensor_vol = vl53l4cd::Vl53l4cd::new(embedded_hal_bus::i2c::RefCellDevice::new(&i2c_bus), 0x29);
+    sensor_vol.init().unwrap();
+    sensor_vol.set_device_address(0x2A).unwrap();
+    log::info!("Volume Sensor initialized and address changed to 0x2A.");
+
+    // B. Boot Right Sensor (Pitch)
+    log::info!("Booting Pitch Sensor...");
+    xshut_pitch.set_high().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    
+    // Initialize Pitch sensor, stays at default address 0x29
+    let mut sensor_pitch = vl53l4cd::Vl53l4cd::new(embedded_hal_bus::i2c::RefCellDevice::new(&i2c_bus), 0x29);
+    sensor_pitch.init().unwrap();
+    log::info!("Pitch Sensor initialized at default address 0x29.");
+
+    // 3. Hardware Interrupt Pins (INT)
     // WARNING: Replace `gpio4` and `gpio5` with the actual pins you choose
     let mut int_pitch = PinDriver::input(pins.gpio4).unwrap();
     let mut int_volume = PinDriver::input(pins.gpio5).unwrap();
@@ -36,6 +69,10 @@ fn main() {
         velocity: expressive_core::U7::new(0),
     }; 10];
 
+    // Start continuous ranging
+    sensor_pitch.start_ranging().unwrap();
+    sensor_vol.start_ranging().unwrap();
+
     log::info!("Entering main async interrupt loop...");
 
     // 3. Main Event Loop (Asynchronous)
@@ -48,8 +85,12 @@ fn main() {
                 continue;
             }
 
-            // TODO: Read actual distance from the VL53L5CX via I2C here
-            let distance_right = 200; // mm (Mock)
+            // Clear the interrupt to allow the next one
+            sensor_pitch.clear_interrupt().unwrap();
+
+            // Read actual distance from the VL53L4CD via I2C
+            let measurement = sensor_pitch.measure().unwrap();
+            let distance_right = measurement.distance_mm;
 
             let event_pitch = SensorEvent::Position3D {
                 id: 0,

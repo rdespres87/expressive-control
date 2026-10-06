@@ -22,7 +22,7 @@ See:
 - **PC Simulator**: Reads sensor events from YAML scenarios (`scenario.yml`, `theremin_scenario.yml`), processes them through the Core/Instruments, and outputs MPE MIDI to a virtual MIDI port named "Expressive MPE Out" (macOS/Linux) that you can connect to your DAW.
 - **Firmwares**: 
   - **nRF5340 (MPE Keyboard)**: Polls an I2C sensor array and outputs MIDI over USB. Supports HIL (Hardware-In-the-Loop) mode by receiving mocked sensor events from the PC simulator over UART.
-  - **ESP32-S3 (ToF Theremin)**: *[WIP]* An `esp-idf` based firmware using VL53L5CX Time-of-Flight sensors mapped to pitch and volume, featuring a Slint UI on an Elecrow 5.0" Display.
+  - **ESP32-S3 (ToF Theremin)**: *[WIP]* An `esp-idf` based firmware using VL53L4CD Time-of-Flight sensors mapped to pitch and volume, featuring a Slint UI on an Elecrow 5.0" Display.
 
 ## Commands
 

@@ -19,6 +19,8 @@ esp-idf-svc = { version = "0.53", features = ["critical-section", "embassy-time-
 embassy-time = { version = "0.5", features = ["generic-queue-8"] }
 expressive-core = { path = "../../core" }
 theremin = { path = "../../instruments/theremin" }
+vl53l4cd = "0.4.0"
+embedded-hal-bus = "0.3"
 
 [build-dependencies]
 embuild = "0.33.5"

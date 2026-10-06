@@ -1,13 +1,13 @@
 # Session State
 
 ## Status
-DONE
+IN_PROGRESS
 
 ## Milestone
 V0.6 ToF Theremin Prototype (ESP32-S3)
 
 ## Current task
-Session ended. Ready for next sprint.
+Select next component to implement (VL53L5CX Driver, USB MIDI, or GUI).
 
 ## Last completed
 - Scaffolding of the `firmwares/expressive-theremin` with `esp-idf` for ESP32-S3.
