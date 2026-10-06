@@ -13,6 +13,15 @@
 - [x] Implement a basic PC Simulator driver for end-to-end testing (YAML scenario -> processor -> MIDI hex dump)
 - [x] Scaffold Embassy nRF5340 App Core firmware with TrustZone secure feature (`nrf5340-app-s`) and fix workspace CI conflicts.
 
-## Pending
+## Pending (nRF5340 Base)
 - [x] Implement USB MIDI Class Compliant transport for nRF5340 (`embassy-usb`)
 - [x] Implement I2C/SPI sensor reader for nRF5340 (`embassy-nrf`)
+
+## ToF Theremin Project (ESP32-S3)
+- [x] Hardware feasibility study and component selection (ESP32-S3, VL53L5CX, Slint UI)
+- [x] Add `SensorEvent::Position3D` definitions to `expressive-core`
+- [ ] Implement `TofThereminProcessor` logic in `expressive-core`
+- [ ] Initialize new Cargo workspace member `firmwares/expressive-theremin` (`esp-idf` based)
+- [ ] Implement VL53L5CX I2C driver with dual-sensor address initialization
+- [ ] Implement USB-MIDI transport for ESP32-S3
+- [ ] Integrate Slint UI interface for the 5" touch display

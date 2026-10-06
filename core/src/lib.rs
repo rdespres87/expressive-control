@@ -45,6 +45,7 @@ impl Channel {
 pub enum SensorEvent {
     Touch { id: u16, x: u8, y: u8, force: u8 },
     Position { id: u16, x: u8, y: u8 },
+    Position3D { id: u16, x: u16, y: u16, z: u16 },
     Released { id: u16 },
 }
 

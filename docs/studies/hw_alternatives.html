@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ToF Theremin: Hardware Alternatives, BOM & Wiring</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #fcfcfc;
+        }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #34495e; margin-top: 2rem; border-bottom: 1px solid #eaeaea; padding-bottom: 5px; }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #eaeaea;
+        }
+        .tag {
+            display: inline-block;
+            background: #e8f4f8;
+            color: #2980b9;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .price { font-weight: bold; color: #27ae60; font-size: 1.1em; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: #f8f9fa; }
+        a { color: #3498db; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .budget-box {
+            background: #e8f8f5;
+            border: 1px solid #1abc9c;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .mermaid { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; margin: 20px 0; border: 1px solid #eaeaea; }
+        .warning-box { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true, theme: 'default'});</script>
+</head>
+<body>
+
+    <h1>ToF Theremin: Hardware Alternatives, BOM & Wiring</h1>
+    <p>This document summarizes the hardware strategies, datasheets, estimated pricing, and wiring schematics for building a ToF-based Theremin with a 5" to 6" touch display.</p>
+
+    <h2>1. MCU & Display Combos (The "Brain")</h2>
+
+    <div class="card">
+        <span class="tag">Recommended / Best Value</span>
+        <h3>Sunton ESP32-8048S050C (5.0" IPS)</h3>
+        <p>A cost-effective all-in-one ESP32-S3 module with an 800x480 IPS capacitive touchscreen.</p>
+        <ul>
+            <li><strong>Estimated Price:</strong> <span class="price">~$34.00 USD</span></li>
+            <li><strong>Where to buy:</strong> AliExpress, specialized electronics hobbyist shops.</li>
+            <li><strong>Notes:</strong> Extremely popular in the maker community. Ensure native USB (GPIO 19/20) is exposed for USB-MIDI.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <span class="tag">Premium Build</span>
+        <h3>Elecrow CrowPanel ESP32 Display 5.0" HMI</h3>
+        <p>A more robust all-in-one ESP32-S3 display, often featuring better documentation and case options.</p>
+        <ul>
+            <li><strong>Estimated Price:</strong> <span class="price">~$50.00 - $70.00 USD</span></li>
+            <li><strong>Where to buy:</strong> Official Elecrow store, Maker distributors.</li>
+        </ul>
+    </div>
+
+    <h2>2. Time-of-Flight (ToF) Sensors (Need 2x)</h2>
+    
+    <table>
+        <tr>
+            <th>Model</th>
+            <th>Type</th>
+            <th>Est. Price (ea)</th>
+            <th>Datasheet & Details</th>
+        </tr>
+        <tr>
+            <td><strong>STMicroelectronics VL53L5CX</strong></td>
+            <td>8x8 Multizone</td>
+            <td><span class="price">~$18 - $26</span></td>
+            <td>
+                <strong>Datasheet:</strong> <a href="https://www.st.com/resource/en/datasheet/vl53l5cx.pdf" target="_blank">DS13754 (PDF)</a><br>
+                <strong>Best for:</strong> MPE & 3D Tracking. Breakouts by <em>SparkFun (SEN-18642)</em> or <em>Pololu (3415)</em>.
+            </td>
+        </tr>
+        <tr>
+            <td><strong>STMicroelectronics VL53L4CD</strong></td>
+            <td>Single Zone</td>
+            <td><span class="price">~$10 - $15</span></td>
+            <td>
+                <strong>Datasheet:</strong> <a href="https://www.st.com/resource/en/datasheet/vl53l4cd.pdf" target="_blank">DS13812 (PDF)</a><br>
+                <strong>Best for:</strong> Pure speed (100Hz) & traditional Theremin Z-axis control.
+            </td>
+        </tr>
+    </table>
+
+    <h2>3. Physical Controls</h2>
+    <ul>
+        <li><strong>Rotary Potentiometers (x4):</strong> 10kΩ Linear (e.g., Alpha). <span class="price">~$5.00</span> total.</li>
+        <li><strong>Rotary Encoder:</strong> EC11 with push-button. <span class="price">~$3.00</span>.</li>
+        <li><strong>ADC Expander (Optional):</strong> ADS1115 (I2C, 16-bit). <span class="price">~$8.00</span>.</li>
+    </ul>
+
+    <h2>4. Estimated Prototype Budget</h2>
+    <div class="budget-box">
+        <h3>Total Estimated Cost: <span class="price">~$90.00 - $110.00 USD</span></h3>
+        <p><em>Breakdown:</em> 1x Sunton 5.0" Display (~$35) + 2x VL53L5CX Pololu Breakouts (~$40) + Potentiometers/Encoders/Wiring (~$15).</p>
+    </div>
+
+    <h2>5. Wiring Schematic & Feasibility</h2>
+    <div class="mermaid">
+    graph TD
+        subgraph ESP32_S3 ["ESP32-S3 Display Module (e.g., Sunton)"]
+            3V3[3.3V Power]
+            GND[GND]
+            SDA[I2C SDA - e.g., GPIO 17]
+            SCL[I2C SCL - e.g., GPIO 18]
+            LP1[GPIO 4 - Digital Out]
+            LP2[GPIO 5 - Digital Out]
+            ADC1[GPIO 6 - ADC1_CH5]
+            ADC2[GPIO 7 - ADC1_CH6]
+        end
+
+        subgraph TOF_LEFT ["Left Sensor: VL53L5CX (Volume)"]
+            L_VCC[VIN]
+            L_GND[GND]
+            L_SDA[SDA]
+            L_SCL[SCL]
+            L_LPn[LPn / XSHUT]
+        end
+
+        subgraph TOF_RIGHT ["Right Sensor: VL53L5CX (Pitch)"]
+            R_VCC[VIN]
+            R_GND[GND]
+            R_SDA[SDA]
+            R_SCL[SCL]
+            R_LPn[LPn / XSHUT]
+        end
+
+        subgraph CONTROLS ["Physical Knobs"]
+            POT1[10k Pot 1: Volume Curve]
+            POT2[10k Pot 2: Pitch Scale]
+        end
+
+        %% Power Connections
+        3V3 --> L_VCC
+        3V3 --> R_VCC
+        3V3 --> POT1
+        3V3 --> POT2
+        
+        GND --- L_GND
+        GND --- R_GND
+        GND --- POT1
+        GND --- POT2
+
+        %% I2C Bus (Shared)
+        SDA === L_SDA
+        SDA === R_SDA
+        SCL === L_SCL
+        SCL === R_SCL
+
+        %% Dedicated Reset Pins for I2C Address Management
+        LP1 -.->|Enable/Reset| L_LPn
+        LP2 -.->|Enable/Reset| R_LPn
+
+        %% Analog Inputs
+        POT1 -->|Analog Voltage 0-3.3V| ADC1
+        POT2 -->|Analog Voltage 0-3.3V| ADC2
+    </div>
+
+    <h2>6. Crucial Wiring Notes</h2>
+    <div class="warning-box">
+        <strong>I2C Address Conflict:</strong> Both VL53L5CX sensors have the exact same default I2C address (<code>0x52</code>). If connected directly to the same SDA/SCL lines, they will conflict.
+    </div>
+    
+    <p><strong>The Solution:</strong> You MUST wire the <code>LPn</code> (or <code>XSHUT</code> / <code>EN</code>) pin of each sensor to a separate, dedicated GPIO on the ESP32-S3.</p>
+    
+    <p><strong>The Boot Sequence:</strong></p>
+    <ol>
+        <li>ESP32-S3 pulls <strong>both</strong> <code>LPn</code> GPIOs LOW (Sensors OFF).</li>
+        <li>ESP32-S3 sets Left Sensor <code>LPn</code> HIGH. Left sensor wakes up at <code>0x52</code>.</li>
+        <li>ESP32-S3 sends I2C command to change its address to <code>0x54</code> in RAM.</li>
+        <li>ESP32-S3 sets Right Sensor <code>LPn</code> HIGH. Right sensor wakes up at default <code>0x52</code>.</li>
+        <li><strong>Result:</strong> Both sensors are active. Left is <code>0x54</code>, Right is <code>0x52</code>.</li>
+    </ol>
+
+    <table>
+        <tr>
+            <th>ESP32-S3 Pin (Generic Example)</th>
+            <th>Component Pin</th>
+            <th>Requirements</th>
+        </tr>
+        <tr>
+            <td>3.3V / VCC</td>
+            <td>VIN (Sensors), VCC (Pots)</td>
+            <td>Must be 3.3V (ESP32 is not 5V tolerant on GPIOs).</td>
+        </tr>
+        <tr>
+            <td>GPIO 17 & 18</td>
+            <td>SDA & SCL (Both Sensors)</td>
+            <td>Requires pull-up resistors (often included on breakouts).</td>
+        </tr>
+        <tr>
+            <td>GPIO 4 & 5</td>
+            <td>LPn / EN (Sensors)</td>
+            <td>Any standard output GPIO.</td>
+        </tr>
+        <tr>
+            <td>GPIO 6 & 7 (ADC1)</td>
+            <td>Wiper (Pots)</td>
+            <td>Must be an <strong>ADC1</strong> pin (ADC2 is restricted when Wi-Fi is active).</td>
+        </tr>
+    </table>
+
+</body>
+</html>

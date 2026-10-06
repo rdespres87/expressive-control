@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ToF Theremin: Integration in expressive-control</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #fcfcfc;
+        }
+        h1 { color: #2c3e50; border-bottom: 2px solid #e74c3c; padding-bottom: 10px; }
+        h2 { color: #c0392b; margin-top: 2rem; border-bottom: 1px solid #eaeaea; padding-bottom: 5px; }
+        .code-block {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            overflow-x: auto;
+            margin-bottom: 15px;
+        }
+        .highlight { color: #e5c07b; }
+        .keyword { color: #c678dd; }
+        .string { color: #98c379; }
+        .comment { color: #5c6370; font-style: italic; }
+        .flow-box {
+            display: inline-block;
+            background: #ecf0f1;
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: 1px solid #bdc3c7;
+            text-align: center;
+            font-weight: bold;
+        }
+        .flow-arrow {
+            display: inline-block;
+            margin: 0 10px;
+            color: #7f8c8d;
+            font-size: 1.5em;
+            vertical-align: middle;
+        }
+        .diagram {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .datasheet-note { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px 15px; font-size: 0.9em; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+    <h1>ToF Theremin Integration Analysis</h1>
+    <p>This document analyzes the integration of the Time-of-Flight Theremin into the <code>expressive-control</code> architecture, strictly adhering to the separation of concerns (Hardware Firmware &rarr; Core Logic &rarr; Transport).</p>
+
+    <h2>1. Architectural Flow</h2>
+    <div class="diagram">
+        <div class="flow-box">Hardware (VL53L5CX)</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-box">Firmware (I2C Driver)</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-box">Core (TofThereminProcessor)</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-box">USB MIDI Transport</div>
+    </div>
+
+    <h2>2. Sensor Interface & Events</h2>
+    <p>The firmware must not compute MIDI data. Instead, it reads the ToF I2C matrix and emits a generalized <code>SensorEvent</code>. For the multizone VL53L5CX, we map the 8x8 matrix into a 3D vector representing the hand's focal point.</p>
+    
+    <div class="datasheet-note">
+        <strong>Hardware Note:</strong> As detailed in the STMicroelectronics <em>DS13754</em> datasheet, the firmware driver will configure the VL53L5CX for <strong>Continuous Ranging Mode</strong> at <strong>60Hz</strong> with an <strong>8x8 resolution</strong>. The driver calculates the spatial average of active zones (where target status indicates a valid hand reflection) to populate the <code>x_offset</code> and <code>y_offset</code>.
+    </div>
+
+    <div class="code-block">
+<span class="keyword">pub enum</span> <span class="highlight">SensorEvent</span> {
+    <span class="comment">/// Emitted by the ToF driver at 60Hz</span>
+    Position3D {
+        source_id: <span class="highlight">u8</span>,  <span class="comment">// 0 for Left Hand, 1 for Right Hand</span>
+        z_distance_mm: <span class="highlight">u16</span>,
+        x_offset: <span class="highlight">i8</span>,   <span class="comment">// Horizontal position in the 8x8 grid (-4 to +4)</span>
+        y_offset: <span class="highlight">i8</span>,   <span class="comment">// Vertical position in the 8x8 grid (-4 to +4)</span>
+    },
+    <span class="comment">/// Emitted by hardware knobs</span>
+    AnalogControl {
+        source_id: <span class="highlight">u8</span>,
+        value: <span class="highlight">u16</span>,
+    }
+}
+    </div>
+
+    <h2>3. Core Processing Logic (The "Brain")</h2>
+    <p>Inside <code>expressive-core</code>, we create a new struct <code>TofThereminProcessor</code> that implements the <code>ControlProcessor</code> trait. It receives the 3D position events and uses the existing <strong>MPE Voice Allocator</strong> to generate <code>InstrumentEvent</code>s.</p>
+
+    <ul>
+        <li><strong>Left Hand (source_id: 0) - Volume:</strong>
+            <ul>
+                <li>If <code>z_distance_mm</code> enters the active threshold: Generate <code>NoteOn</code>.</li>
+                <li>Map <code>z_distance_mm</code> inversely to <code>InstrumentEvent::ControlChange(CC7_Volume)</code>.</li>
+                <li>Map <code>x_offset</code> to <code>ControlChange(CC1_Modulation)</code>.</li>
+            </ul>
+        </li>
+        <li><strong>Right Hand (source_id: 1) - Pitch & MPE:</strong>
+            <ul>
+                <li>The MPE Allocator assigns a dedicated MIDI Channel.</li>
+                <li>Base note is determined by the initial <code>z_distance</code> at NoteOn.</li>
+                <li>Continuous <code>z_distance</code> changes emit <code>InstrumentEvent::PitchBend</code> on that specific channel.</li>
+                <li><code>y_offset</code> is mapped to <code>ControlChange(CC4_Timbre)</code>.</li>
+            </ul>
+        </li>
+    </ul>
+
+    <h2>4. Configuration & Calibration</h2>
+    <p>The system is highly dependent on physical space. The configuration state (parsed from YAML in the simulator or edited via the UI on the physical device) must define the response curves.</p>
+
+    <div class="code-block">
+<span class="comment"># Theremin Configuration Model</span>
+<span class="highlight">theremin:</span>
+  <span class="highlight">left_hand:</span>
+    <span class="highlight">deadzone_max_mm:</span> <span class="string">800</span>    <span class="comment"># Note On threshold</span>
+    <span class="highlight">deadzone_min_mm:</span> <span class="string">50</span>     <span class="comment"># Max volume threshold</span>
+    <span class="highlight">curve:</span> <span class="string">"Exponential"</span>
+  <span class="highlight">right_hand:</span>
+    <span class="highlight">scale:</span> <span class="string">"Chromatic"</span>
+    <span class="highlight">pitch_bend_range:</span> <span class="string">48</span>    <span class="comment"># MPE standard (±48 semitones)</span>
+    <span class="highlight">mm_per_semitone:</span> <span class="string">15</span>     <span class="comment"># Defines the "fret" distance</span>
+    </div>
+
+    <p><strong>The Touch UI Role:</strong> The 5" screen updates these parameters in real-time. When a user turns a potentiometer (e.g., to adjust the scale), the <code>AnalogControl</code> event routes through the processor to dynamically mutate this configuration state.</p>
+
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elecrow 5.0" ToF Theremin Wiring</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #f8f9fa;
+        }
+        h1 { color: #2c3e50; border-bottom: 2px solid #e67e22; padding-bottom: 10px; }
+        h2 { color: #e67e22; margin-top: 2rem; border-bottom: 1px solid #eaeaea; padding-bottom: 5px; }
+        .mermaid { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); text-align: center; margin: 20px 0; border: 1px solid #eaeaea; }
+        .info-box { background: #e8f8f5; border-left: 4px solid #1abc9c; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: #f1f2f6; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true, theme: 'default'});</script>
+</head>
+<body>
+
+    <h1>Elecrow 5.0" ESP32-S3: Theremin Hardware Architecture</h1>
+    <p>This diagram illustrates the final optimized hardware topology for the Theremin, centered around the Elecrow CrowPanel 5.0". To bypass any analog pin limitations on the screen, an <strong>ADS1115 I2C ADC</strong> is used to read all potentiometers cleanly.</p>
+
+    <div class="info-box">
+        <strong>The Power of the I2C Bus:</strong> Notice how the two ToF sensors and the ADC expander all share the exact same 4-wire I2C port from the Elecrow board. This massively reduces wiring complexity inside the instrument chassis.
+    </div>
+
+    <h2>1. System Topology</h2>
+    <div class="mermaid">
+    flowchart TD
+        subgraph ELECROW ["Elecrow CrowPanel ESP32-S3 5.0-inch"]
+            I2C_PORT[Crowtail I2C Port: SDA & SCL]
+            PWR[Power Output: 3.3V & GND]
+            GPIO_EXP[GPIO Expansion Headers]
+        end
+
+        subgraph I2C_BUS ["The I2C Bus (Daisy-chained)"]
+            TOF_L["VL53L5CX (Left Hand)"]
+            TOF_R["VL53L5CX (Right Hand)"]
+            ADC["ADS1115 (16-bit 4-Ch ADC)"]
+        end
+
+        subgraph ANALOG ["Analog Controls (Potentiometers)"]
+            POT1[Pot 1: Volume/Curve]
+            POT2[Pot 2: Pitch/Scale]
+            POT3[Pot 3: Timbre/CC4]
+            POT4[Pot 4: Assignable]
+        end
+
+        subgraph DIGITAL ["Digital Controls"]
+            ENC["Rotary Encoder (KY-040)"]
+            BTN["Action/Preset Buttons"]
+        end
+
+        %% Power routing
+        PWR -->|3.3V & GND| I2C_BUS
+        PWR -->|3.3V & GND| ANALOG
+        PWR -->|3.3V & GND| DIGITAL
+
+        %% I2C routing
+        I2C_PORT ===|SDA & SCL| TOF_L
+        I2C_PORT ===|SDA & SCL| TOF_R
+        I2C_PORT ===|SDA & SCL| ADC
+
+        %% ADC routing
+        ADC ---|Input A0| POT1
+        ADC ---|Input A1| POT2
+        ADC ---|Input A2| POT3
+        ADC ---|Input A3| POT4
+
+        %% GPIO routing (Digital)
+        GPIO_EXP -.-|GPIO Out: XSHUT/Reset Left| TOF_L
+        GPIO_EXP -.-|GPIO Out: XSHUT/Reset Right| TOF_R
+        GPIO_EXP ---|GPIO In: CLK, DT, SW| ENC
+        GPIO_EXP ---|GPIO In| BTN
+    </div>
+
+    <h2>2. Connection Guide</h2>
+    <table>
+        <tr>
+            <th>Module</th>
+            <th>Connects to...</th>
+            <th>Signal Type</th>
+            <th>Notes</th>
+        </tr>
+        <tr>
+            <td><strong>VL53L5CX (Left)</strong></td>
+            <td>Elecrow I2C Port + 1x GPIO</td>
+            <td>I2C + Digital Out</td>
+            <td>Needs a dedicated GPIO to its `LPn` / `RST` pin for boot sequence.</td>
+        </tr>
+        <tr>
+            <td><strong>VL53L5CX (Right)</strong></td>
+            <td>Elecrow I2C Port + 1x GPIO</td>
+            <td>I2C + Digital Out</td>
+            <td>Needs a dedicated GPIO to its `LPn` / `RST` pin for boot sequence.</td>
+        </tr>
+        <tr>
+            <td><strong>ADS1115 (ADC)</strong></td>
+            <td>Elecrow I2C Port</td>
+            <td>I2C</td>
+            <td>Reads the 4 potentiometers and converts them to digital data for the ESP32. Set ADDR pin to GND (address 0x48).</td>
+        </tr>
+        <tr>
+            <td><strong>Potentiometers (x4)</strong></td>
+            <td>ADS1115 (A0 to A3)</td>
+            <td>Analog Voltage</td>
+            <td>Outer pins to 3.3V and GND. Center wiper pin to the ADS1115 analog inputs.</td>
+        </tr>
+        <tr>
+            <td><strong>Rotary Encoder</strong></td>
+            <td>Elecrow GPIO Headers</td>
+            <td>Digital In (x3)</td>
+            <td>Uses 3 standard digital pins (CLK, DT for rotation, SW for the click).</td>
+        </tr>
+    </table>
+
+</body>
+</html>

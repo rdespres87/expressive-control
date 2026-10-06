@@ -114,6 +114,7 @@ impl ControlProcessor for MpeInstrument {
                     Ok(0)
                 }
             }
+            SensorEvent::Position3D { .. } => Ok(0),
             SensorEvent::Released { id } => {
                 if out_buffer.is_empty() {
                     return Err(ProcessorError::BufferTooSmall);
