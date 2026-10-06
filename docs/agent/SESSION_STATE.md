@@ -4,24 +4,28 @@
 IN_PROGRESS
 
 ## Milestone
-V0.5 Embedded HAL Implementation
+V0.6 ToF Theremin Prototype (ESP32-S3)
 
 ## Current task
-Implement I2C/SPI sensor reader for nRF5340.
+Initialize new Cargo workspace member `firmwares/expressive-theremin` (`esp-idf` based).
 
 ## Last completed
-- Implemented USB MIDI Class Compliant transport for nRF5340.
-- Checked off USB MIDI from TASKS.md.
+- Added `SensorEvent::Position3D` to `expressive-core`.
+- Created generic abstraction layer via `instruments/theremin` crate.
+- Implemented `TofThereminProcessor` logic to map Z distance to PitchBend and Volume.
+- Successfully passed CI and committed the changes.
 
 ## Next action
-- Add Twim (I2C) or Spim (SPI) dependencies/features in `nrf5340/Cargo.toml`.
-- Implement a `SensorReader` using `embassy_nrf::twim::Twim`.
-- Integrate the sensor reader into the main polling loop in `main.rs`, replacing the dummy `mock_event`.
+- Run `cargo new --bin firmwares/expressive-theremin`.
+- Configure `esp-idf` and TrustZone/STD requirements.
+- Import `expressive-core` and `instruments/theremin`.
+- Scaffold the main I2C polling loop for VL53L5CX.
 
 ## Verification
 - cargo fmt --check: OK
 - cargo check: OK
-- The I2C code cleanly integrates into the existing loop without unwrap() warnings.
+- cargo clippy: OK
+- Architecture cleanly decoupled (Core vs Instruments vs Firmware).
 
 ## Blockers
 None.
