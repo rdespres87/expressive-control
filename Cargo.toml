@@ -1,9 +1,20 @@
 [workspace]
-resolver = "2"
 members = [
-    "core", "instruments/theremin",
-    "simulator"
+    "core",
+    "instruments/theremin",
+    "simulator",
 ]
-exclude = [
-    "firmwares/nrf5340"
-]
+exclude = ["firmwares/nrf5340", "firmwares/expressive-theremin"]
+resolver = "2"
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true    # Symbols are nice, and they don't increase the size on Flash
+opt-level = "z"
+
+[patch.crates-io]
+esp-idf-sys = { git = "https://github.com/esp-rs/esp-idf.git" }
+esp-idf-hal = { git = "https://github.com/esp-rs/esp-idf.git" }
+esp-idf-svc = { git = "https://github.com/esp-rs/esp-idf.git" }

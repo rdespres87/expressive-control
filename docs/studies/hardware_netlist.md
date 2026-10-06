@@ -34,6 +34,8 @@ To prevent the two ToF sensors from crashing the bus (both default to address `0
 | :--- | :--- | :--- | :--- |
 | `GPIO_A` (Any free OUT) | Left ToF (VL53L5CX) | `LPn` / `XSHUT` | Boots Left sensor to change address to 0x54. |
 | `GPIO_B` (Any free OUT) | Right ToF (VL53L5CX)| `LPn` / `XSHUT` | Boots Right sensor (stays at 0x52). |
+| `GPIO_X` (Any free IN)  | Left ToF (VL53L5CX) | `INT`           | Hardware interrupt for Left sensor (Data Ready). |
+| `GPIO_Y` (Any free IN)  | Right ToF (VL53L5CX)| `INT`           | Hardware interrupt for Right sensor (Data Ready). |
 | `GND` | ADC (ADS1115) | `ADDR` | Hardwires the ADC I2C address to `0x48`. |
 
 ## 4. Analog Controls (Potentiometers)

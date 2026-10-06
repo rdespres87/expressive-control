@@ -80,6 +80,8 @@
         %% GPIO routing (Digital)
         GPIO_EXP -.-|GPIO Out: XSHUT/Reset Left| TOF_L
         GPIO_EXP -.-|GPIO Out: XSHUT/Reset Right| TOF_R
+        GPIO_EXP -.-|GPIO In: Interrupt Left| TOF_L
+        GPIO_EXP -.-|GPIO In: Interrupt Right| TOF_R
         GPIO_EXP ---|GPIO In: CLK, DT, SW| ENC
         GPIO_EXP ---|GPIO In| BTN
     </div>
@@ -94,15 +96,15 @@
         </tr>
         <tr>
             <td><strong>VL53L5CX (Left)</strong></td>
-            <td>Elecrow I2C Port + 1x GPIO</td>
-            <td>I2C + Digital Out</td>
-            <td>Needs a dedicated GPIO to its `LPn` / `RST` pin for boot sequence.</td>
+            <td>Elecrow I2C Port + 2x GPIO</td>
+            <td>I2C + Digital Out + Digital In</td>
+            <td>Needs a dedicated GPIO to its `LPn` / `RST` pin for boot sequence, and another GPIO for the `INT` (Data Ready) pin.</td>
         </tr>
         <tr>
             <td><strong>VL53L5CX (Right)</strong></td>
-            <td>Elecrow I2C Port + 1x GPIO</td>
-            <td>I2C + Digital Out</td>
-            <td>Needs a dedicated GPIO to its `LPn` / `RST` pin for boot sequence.</td>
+            <td>Elecrow I2C Port + 2x GPIO</td>
+            <td>I2C + Digital Out + Digital In</td>
+            <td>Needs a dedicated GPIO to its `LPn` / `RST` pin for boot sequence, and another GPIO for the `INT` (Data Ready) pin.</td>
         </tr>
         <tr>
             <td><strong>ADS1115 (ADC)</strong></td>
