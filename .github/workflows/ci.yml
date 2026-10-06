@@ -30,10 +30,10 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Lint with Clippy
-        run: cargo clippy -p expressive-core -p simulator -p instruments -- -D warnings
+        run: cargo clippy -p expressive-core -p simulator -p theremin -- -D warnings
 
       - name: Run Unit Tests (Core & Simulator)
-        run: cargo test -p expressive-core -p simulator -p instruments
+        run: cargo test -p expressive-core -p simulator -p theremin
 
   check-embedded:
     name: Verify no_std (Embedded Target)
