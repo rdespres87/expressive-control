@@ -319,8 +319,8 @@ async fn send_telemetry<T: esp_idf_hal::uart::Uart>(
 
 // --- Application ---
 
-async fn run() -> Result<(), FirmwareError> {
-    log::info!("Starting in mode: {:?}", BOARD_MODE);
+async fn run_master() -> Result<(), FirmwareError> {
+    log::info!("Starting in MASTER mode...");
     
     let peripherals = Peripherals::take().context("peripherals take")?;
     let pins = peripherals.pins;
@@ -426,13 +426,67 @@ async fn run() -> Result<(), FirmwareError> {
     }
 }
 
+async fn run_slave() -> Result<(), FirmwareError> {
+    log::info!("Starting in SLAVE mode...");
+    let peripherals = Peripherals::take().context("peripherals take")?;
+    let pins = peripherals.pins;
+
+    log::info!("Initializing UART telemetry link (Slave <- Master)...");
+    let uart_config = UartConfig::new().baudrate(115200.into());
+    let mut uart = AsyncUartDriver::new(
+        peripherals.uart1,
+        pins.gpio17, // TX
+        pins.gpio18, // RX
+        Option::<esp_idf_hal::gpio::AnyIOPin>::None,
+        Option::<esp_idf_hal::gpio::AnyIOPin>::None,
+        &uart_config,
+    ).context("UART init")?;
+
+    let mut cobs_buf = [0u8; MAX_MESSAGE_SIZE];
+
+    log::info!("Entering Slave UART listen loop...");
+    loop {
+        let mut byte = [0u8; 1];
+        let mut idx = 0;
+        
+        loop {
+            // Read until COBS terminator 0x00
+            if uart.read(&mut byte).await.is_ok() && byte[0] != 0x00 {
+                if idx < cobs_buf.len() {
+                    cobs_buf[idx] = byte[0];
+                    idx += 1;
+                }
+            } else {
+                break;
+            }
+        }
+        
+        if idx > 0 {
+            if let Ok(decoded_len) = cobs::decode_in_place(&mut cobs_buf[..idx]) {
+                if let Ok(msg) = postcard::from_bytes::<MasterMessage>(&cobs_buf[..decoded_len]) {
+                    log::info!("Received Telemetry: {:?}", msg);
+                    // TODO: Update Slint UI
+                }
+            }
+        }
+    }
+}
+
 fn main() {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
 
-    log::info!("Starting ToF Theremin Firmware (Interrupt-driven)...");
+    log::info!("Starting ToF Theremin Firmware (BOARD_MODE = {:?})", BOARD_MODE);
 
-    if let Err(e) = block_on(run()) {
+    let app_future = async {
+        match BOARD_MODE {
+            ThereminMode::MasterBoard => run_master().await,
+            ThereminMode::SlaveBoard => run_slave().await,
+            ThereminMode::SingleBoard => run_master().await,
+        }
+    };
+
+    if let Err(e) = block_on(app_future) {
         log::error!("Fatal: {e}. Restarting in {FATAL_RESTART_DELAY_MS} ms...");
         FreeRtos::delay_ms(FATAL_RESTART_DELAY_MS);
         esp_idf_hal::reset::restart();
