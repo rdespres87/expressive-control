@@ -1,321 +1,112 @@
-export component MainWindow inherits Window {
+export component SlaveWindow inherits Window {
     width: 800px;
     height: 480px;
-    background: #08080c; // Deeper, more premium dark background
-    title: "Expressive Theremin";
+    background: #0c0b0f; // Very dark warm background to contrast with wood
+    title: "Theremin Tuner (Slave)";
 
-    in property <string> pitch_note: "C4";
-    in property <string> pitch_hz: "261.63 Hz";
-    in property <float> pitch_progress: 0.5; // 0.0 to 1.0
+    // Data injected by the Rust firmware via UART
+    in property <string> note_name: "C";
+    in property <string> octave: "4";
+    in property <float> cents: 0.0; // -50.0 to +50.0
+    in property <bool> is_active: false;
+    
+    // UI Theme
+    property <color> accent_color: #00f0ff; // Neon cyan
+    property <color> perfect_color: #00ffa6; // Mint green for perfect pitch
+    property <color> flat_color: #ffaa00; // Orange/Yellow for flat
+    property <color> sharp_color: #ff2a5f; // Pink/Red for sharp
 
-    in property <string> volume_text: "-8.5 dB";
-    in property <string> volume_percent: "75%";
-    in property <float> volume_progress: 0.75; // 0.0 to 1.0
-
-    // Colors
-    property <color> pitch_color: #00f0ff;
-    property <color> pitch_color_dim: #00222b;
-    property <color> vol_color: #d100ff;
-    property <color> vol_color_dim: #2b0033;
-    property <color> panel_bg: #101018;
-    property <color> text_muted: #737380;
-    property <color> text_bright: #ffffff;
+    // Dynamic color logic: Green if within 3 cents, otherwise gradient-like logic
+    property <color> tune_color: !root.is_active ? #333340 : (abs(root.cents) < 3.0 ? perfect_color : (root.cents < 0 ? flat_color : sharp_color));
 
     VerticalLayout {
-        padding-left: 30px;
-        padding-right: 30px;
-        padding-top: 20px;
-        padding-bottom: 20px;
-        spacing: 15px;
-
-        // TOP BAR
-        HorizontalLayout {
-            height: 35px;
-            alignment: space-between;
-
-            // Left stats
-            HorizontalLayout {
-                spacing: 20px;
-                alignment: start;
-                Text { text: "🔋 94%"; color: root.text_muted; font-size: 14px; font-weight: 500; vertical-alignment: center; }
-                Text { text: "📶"; color: #0a84ff; font-size: 16px; vertical-alignment: center; }
-                Text { text: "v1.3"; color: root.text_muted; font-size: 14px; font-weight: 500; vertical-alignment: center; }
-            }
-
-            // Center Title
-            VerticalLayout {
-                alignment: center;
-                Text {
-                    text: "EXPRESSIVE";
-                    font-size: 11px;
-                    color: root.text_muted;
-                    letter-spacing: 3px;
-                    font-weight: 600;
-                    horizontal-alignment: center;
-                }
-                Text {
-                    text: "THEREMIN";
-                    font-size: 24px;
-                    font-weight: 900;
-                    color: root.text_bright;
-                    letter-spacing: 5px;
-                    horizontal-alignment: center;
-                }
-            }
-
-            // Right stats
-            HorizontalLayout {
-                spacing: 20px;
-                alignment: end;
-                Text { text: "14:38"; color: root.text_muted; font-size: 15px; font-weight: 600; vertical-alignment: center; }
-                Text { text: "⚙️"; color: root.text_muted; font-size: 18px; vertical-alignment: center; }
-            }
-        }
-
-        // MAIN CONTENT
-        HorizontalLayout {
-            spacing: 50px;
-            alignment: center;
-            padding-top: 15px;
-            padding-bottom: 15px;
-
-            // PITCH PANEL
-            Rectangle {
-                width: 250px;
-                background: root.panel_bg;
-                border-radius: 24px;
-                border-width: 2px;
-                border-color: root.pitch_color.with-alpha(0.3);
-                drop-shadow-color: root.pitch_color.with-alpha(0.15);
-                drop-shadow-blur: 20px;
-                
-                // Subtle top highlight
-                Rectangle {
-                    y: 2px;
-                    x: 24px;
-                    width: parent.width - 48px;
-                    height: 2px;
-                    background: root.pitch_color.with-alpha(0.5);
-                    border-radius: 1px;
-                }
-
-                HorizontalLayout {
-                    padding: 25px;
-                    spacing: 15px;
-
-                    // Left Column (Text)
-                    VerticalLayout {
-                        alignment: space-around;
-                        width: 110px;
-
-                        Text { text: "PITCH"; font-size: 18px; font-weight: 800; color: root.pitch_color; letter-spacing: 1px; horizontal-alignment: center; }
-                        
-                        VerticalLayout {
-                            spacing: 2px;
-                            Text { text: "NOTE"; font-size: 12px; font-weight: 600; color: root.text_muted; horizontal-alignment: center; }
-                            Text { 
-                                text: root.pitch_note; 
-                                font-size: 52px; 
-                                font-weight: 900; 
-                                color: root.text_bright; 
-                                horizontal-alignment: center;
-                            }
-                        }
-
-                        VerticalLayout {
-                            spacing: 4px;
-                            Text { text: "FREQ"; font-size: 11px; font-weight: 600; color: root.text_muted; horizontal-alignment: center; }
-                            Text { text: root.pitch_hz; font-size: 18px; font-weight: 700; color: root.text_bright; horizontal-alignment: center; }
-                        }
-                    }
-
-                    // Right Column (Segmented Bar)
-                    Rectangle {
-                        width: 60px;
-                        background: #050508;
-                        border-radius: 12px;
-                        border-width: 1px;
-                        border-color: #1a1a24;
-                        drop-shadow-color: #000000;
-                        drop-shadow-blur: 10px;
-
-                        for i in 24 : Rectangle {
-                            x: 12px;
-                            y: parent.height - 12px - (i + 1) * ((parent.height - 24px) / 24);
-                            width: 36px;
-                            height: ((parent.height - 24px) / 24) - 3px;
-                            border-radius: 3px;
-                            // Smooth gradient effect for active segments
-                            background: (i / 24.0) < root.pitch_progress ? 
-                                        root.pitch_color.with-alpha(0.4 + (i / 24.0) * 0.6) : 
-                                        root.pitch_color_dim;
-                            drop-shadow-color: (i / 24.0) < root.pitch_progress ? root.pitch_color.with-alpha(0.5) : transparent;
-                            drop-shadow-blur: (i / 24.0) < root.pitch_progress ? 6px : 0px;
-                            
-                            animate background { duration: 150ms; }
-                            animate drop-shadow-color { duration: 150ms; }
-                        }
-                    }
-                }
-            }
-
-            // CENTER WAVEFORM (Placeholder)
-            Rectangle {
-                width: 150px;
-                VerticalLayout {
-                    alignment: center;
-                    spacing: 20px;
-                    
-                    // Faux Waveform graphics
-                    HorizontalLayout {
-                        alignment: center;
-                        spacing: -5px;
-                        for i in 3 : Text {
-                            text: "〰️";
-                            font-size: 38px;
-                            color: root.pitch_color;
-                        }
-                    }
-                    HorizontalLayout {
-                        alignment: center;
-                        spacing: -5px;
-                        for i in 3 : Text {
-                            text: "〰️";
-                            font-size: 38px;
-                            color: root.vol_color;
-                        }
-                    }
-
-                    // Status Pills
-                    HorizontalLayout {
-                        alignment: center;
-                        spacing: 15px;
-                        Rectangle { 
-                            width: 50px; height: 24px; border-radius: 12px; background: #201010; 
-                            border-width: 1px; border-color: #ff3b30;
-                            Text { text: "REC"; font-weight: 800; color: #ff3b30; font-size: 11px; horizontal-alignment: center; vertical-alignment: center;} 
-                        }
-                        Rectangle { 
-                            width: 50px; height: 24px; border-radius: 12px; background: #1a1a24; 
-                            border-width: 1px; border-color: #505060;
-                            Text { text: "LFO"; font-weight: 800; color: #a0a0b0; font-size: 11px; horizontal-alignment: center; vertical-alignment: center;} 
-                        }
-                    }
-                }
-            }
-
-            // VOLUME PANEL
-            Rectangle {
-                width: 250px;
-                background: root.panel_bg;
-                border-radius: 24px;
-                border-width: 2px;
-                border-color: root.vol_color.with-alpha(0.3);
-                drop-shadow-color: root.vol_color.with-alpha(0.15);
-                drop-shadow-blur: 20px;
-
-                // Subtle top highlight
-                Rectangle {
-                    y: 2px;
-                    x: 24px;
-                    width: parent.width - 48px;
-                    height: 2px;
-                    background: root.vol_color.with-alpha(0.5);
-                    border-radius: 1px;
-                }
-
-                HorizontalLayout {
-                    padding: 25px;
-                    spacing: 15px;
-
-                    // Left Column (Segmented Bar)
-                    Rectangle {
-                        width: 60px;
-                        background: #050508;
-                        border-radius: 12px;
-                        border-width: 1px;
-                        border-color: #1a1a24;
-                        drop-shadow-color: #000000;
-                        drop-shadow-blur: 10px;
-
-                        for i in 24 : Rectangle {
-                            x: 12px;
-                            y: parent.height - 12px - (i + 1) * ((parent.height - 24px) / 24);
-                            width: 36px;
-                            height: ((parent.height - 24px) / 24) - 3px;
-                            border-radius: 3px;
-                            background: (i / 24.0) < root.volume_progress ? 
-                                        root.vol_color.with-alpha(0.4 + (i / 24.0) * 0.6) : 
-                                        root.vol_color_dim;
-                            drop-shadow-color: (i / 24.0) < root.volume_progress ? root.vol_color.with-alpha(0.5) : transparent;
-                            drop-shadow-blur: (i / 24.0) < root.volume_progress ? 6px : 0px;
-
-                            animate background { duration: 150ms; }
-                            animate drop-shadow-color { duration: 150ms; }
-                        }
-                    }
-
-                    // Right Column (Text)
-                    VerticalLayout {
-                        alignment: space-around;
-                        width: 110px;
-
-                        Text { text: "VOLUME"; font-size: 18px; font-weight: 800; color: root.vol_color; letter-spacing: 1px; horizontal-alignment: center; }
-                        
-                        VerticalLayout {
-                            spacing: 2px;
-                            Text { text: "LEVEL"; font-size: 12px; font-weight: 600; color: root.text_muted; horizontal-alignment: center; }
-                            Text { 
-                                text: root.volume_percent; 
-                                font-size: 52px; 
-                                font-weight: 900; 
-                                color: root.text_bright; 
-                                horizontal-alignment: center;
-                            }
-                        }
-
-                        VerticalLayout {
-                            spacing: 4px;
-                            Text { text: "GAIN"; font-size: 11px; font-weight: 600; color: root.text_muted; horizontal-alignment: center; }
-                            Text { text: root.volume_text; font-size: 18px; font-weight: 700; color: root.text_bright; horizontal-alignment: center; }
-                        }
-                    }
-                }
-            }
-        }
-
-        // BOTTOM BAR
+        alignment: center;
+        spacing: 10px;
+        
+        // TOP: Segmented Bargraph Gauge
         Rectangle {
-            height: 40px;
-            background: #0f0f15;
-            border-radius: 20px;
+            height: 140px;
+            width: 100%;
             
-            HorizontalLayout {
-                padding-left: 30px;
-                padding-right: 30px;
-                alignment: space-between;
+            // 20 segments on the flat (left) side
+            for i in 20: Rectangle {
+                // i goes from 0 to 19. i=0 is furthest left, i=19 is closest to center.
+                x: 30px + i * ((parent.width / 2 - 50px) / 20);
+                y: 50px;
+                width: ((parent.width / 2 - 50px) / 20) - 4px;
+                height: 40px;
+                border-radius: 6px;
                 
-                HorizontalLayout {
-                    spacing: 8px;
-                    alignment: center;
-                    Text { text: "MODE"; color: root.text_muted; font-size: 11px; font-weight: 700; vertical-alignment: center; letter-spacing: 1px;}
-                    Text { text: "CONTINUOUS"; color: root.pitch_color; font-size: 12px; font-weight: 800; vertical-alignment: center; letter-spacing: 1px; }
-                }
-
-                HorizontalLayout {
-                    spacing: 8px;
-                    alignment: center;
-                    Text { text: "RANGE"; color: root.text_muted; font-size: 11px; font-weight: 700; vertical-alignment: center; letter-spacing: 1px;}
-                    Text { text: "3 OCT"; color: root.text_bright; font-size: 12px; font-weight: 800; vertical-alignment: center; letter-spacing: 1px; }
-                }
-
-                HorizontalLayout {
-                    spacing: 8px;
-                    alignment: center;
-                    Text { text: "STATUS"; color: root.text_muted; font-size: 11px; font-weight: 700; vertical-alignment: center; letter-spacing: 1px;}
-                    Text { text: "ACTIVE"; color: root.vol_color; font-size: 12px; font-weight: 800; vertical-alignment: center; letter-spacing: 1px; }
-                }
+                // Active if cents is negative and absolute cents maps to this segment or further left
+                background: (root.is_active && root.cents < 0.0 && root.cents <= ((i - 20) * 2.5)) ? root.flat_color : #1a1a24;
+                drop-shadow-color: (root.is_active && root.cents < 0.0 && root.cents <= ((i - 20) * 2.5)) ? root.flat_color.with-alpha(0.5) : transparent;
+                drop-shadow-blur: 8px;
+                animate background { duration: 80ms; }
+                animate drop-shadow-color { duration: 80ms; }
             }
+
+            // Center Perfect Marker
+            Rectangle {
+                x: parent.width / 2 - 8px;
+                y: 40px;
+                width: 16px;
+                height: 60px;
+                border-radius: 8px;
+                background: (root.is_active && abs(root.cents) <= 2.5) ? root.perfect_color : #333340;
+                drop-shadow-color: (root.is_active && abs(root.cents) <= 2.5) ? root.perfect_color.with-alpha(0.8) : transparent;
+                drop-shadow-blur: 15px;
+                animate background { duration: 150ms; }
+            }
+
+            // 20 segments on the sharp (right) side
+            for i in 20: Rectangle {
+                // i goes from 0 to 19. i=0 is closest to center, i=19 is furthest right.
+                x: parent.width / 2 + 20px + i * ((parent.width / 2 - 50px) / 20);
+                y: 50px;
+                width: ((parent.width / 2 - 50px) / 20) - 4px;
+                height: 40px;
+                border-radius: 6px;
+                
+                // Active if cents > 0 and cents >= (i+1) * 2.5
+                background: (root.is_active && root.cents > 0.0 && root.cents >= ((i + 1) * 2.5)) ? root.sharp_color : #1a1a24;
+                drop-shadow-color: (root.is_active && root.cents > 0.0 && root.cents >= ((i + 1) * 2.5)) ? root.sharp_color.with-alpha(0.5) : transparent;
+                drop-shadow-blur: 8px;
+                animate background { duration: 80ms; }
+                animate drop-shadow-color { duration: 80ms; }
+            }
+        }
+        
+        // MIDDLE: Note Display
+        HorizontalLayout {
+            alignment: center;
+            spacing: 8px;
+            
+            Text {
+                text: root.is_active ? root.note_name : "--";
+                font-size: 140px;
+                font-weight: 900;
+                color: root.is_active ? #ffffff : #333340;
+                letter-spacing: -2px;
+                animate color { duration: 200ms; }
+            }
+            
+            Text {
+                text: root.is_active ? root.octave : "";
+                font-size: 60px;
+                font-weight: 700;
+                color: root.is_active ? root.accent_color : transparent;
+                vertical-alignment: bottom;
+            }
+        }
+        
+        // BOTTOM: Exact Cents Text
+        Text {
+            text: root.is_active ? round(root.cents) + " cents" : "STANDBY";
+            font-size: 20px;
+            font-weight: 600;
+            color: root.tune_color;
+            horizontal-alignment: center;
+            letter-spacing: 2px;
         }
     }
 }

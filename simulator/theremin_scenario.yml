@@ -1,29 +1,81 @@
-# Theremin Simulation Scenario
+# Theremin Simulation Scenario - Glissando & Vibrato
 # Demonstrates 3D spatial gestures mapped to MIDI.
+# C4=1000, G4=714, A4=633, C5=510
 
 actions:
-  # Approach Right Hand (Pitch drops from high to low)
-  - event: !Position3D { id: 0, x: 0, y: 0, z: 400 }
-  - wait_ms: 50
-  - event: !Position3D { id: 0, x: 0, y: 0, z: 300 }
-  - wait_ms: 50
-  - event: !Position3D { id: 0, x: 0, y: 0, z: 200 }
-  - wait_ms: 50
-  - event: !Position3D { id: 0, x: 0, y: 0, z: 100 }
+  # Initialize Hands: Volume muted, Pitch at C4
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 1000 }
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 1000 }
   - wait_ms: 500
 
-  # Approach Left Hand (Volume increases)
-  - event: !Position3D { id: 1, x: 0, y: 0, z: 400 }
-  - wait_ms: 50
-  - event: !Position3D { id: 1, x: 0, y: 0, z: 300 }
-  - wait_ms: 50
-  - event: !Position3D { id: 1, x: 0, y: 0, z: 200 }
-  - wait_ms: 50
-  - event: !Position3D { id: 1, x: 0, y: 0, z: 50 }
+  # 1. Fade in volume slowly to maximum (z=20)
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 800 }
+  - wait_ms: 200
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 500 }
+  - wait_ms: 200
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 20 }
+  
+  # Hold C4 (Perfect pitch)
+  - wait_ms: 1500
+
+  # 2. Glissando up to C5 (z=510)
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 900 }
+  - wait_ms: 150
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 800 }
+  - wait_ms: 150
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 700 }
+  - wait_ms: 150
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 600 }
+  - wait_ms: 150
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 510 } # C5
+  
+  # Hold C5
+  - wait_ms: 800
+  
+  # Vibrato on C5
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 500 }
+  - wait_ms: 150
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 520 }
+  - wait_ms: 150
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 510 }
+  - wait_ms: 1500
+
+  # 3. Slow Glissando down to G4 (z=714)
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 560 }
+  - wait_ms: 250
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 610 }
+  - wait_ms: 250
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 660 }
+  - wait_ms: 250
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 714 } # G4
+  
+  # Hold G4 with a tiny bend
+  - wait_ms: 1000
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 700 }
+  - wait_ms: 200
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 714 }
   - wait_ms: 1000
 
-  # Withdraw Left Hand (Volume drops)
-  - event: !Position3D { id: 1, x: 0, y: 0, z: 200 }
-  - wait_ms: 50
+  # 4. Glissando up to A4 (z=633)
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 680 }
+  - wait_ms: 250
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 633 } # A4
+  - wait_ms: 1500
+
+  # 5. Glissando down to C4 (z=1000)
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 700 }
+  - wait_ms: 200
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 800 }
+  - wait_ms: 200
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 900 }
+  - wait_ms: 200
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 1000 } # C4
+  - wait_ms: 1500
+
+  # 6. Fade out volume slowly
   - event: !Position3D { id: 1, x: 0, y: 0, z: 500 }
+  - wait_ms: 300
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 800 }
+  - wait_ms: 300
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 1000 }
   - wait_ms: 500

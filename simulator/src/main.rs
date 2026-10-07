@@ -55,13 +55,38 @@ fn open_virtual_midi_port() -> Result<MidiOutputConnection, SimError> {
     Err(SimError::UnsupportedPlatform)
 }
 
-fn apply_snapshot(ui: &MainWindow, snapshot: &DisplaySnapshot) {
-    ui.set_pitch_note(snapshot.pitch_note.as_str().into());
-    ui.set_pitch_hz(snapshot.pitch_hz.as_str().into());
-    ui.set_pitch_progress(snapshot.pitch_progress);
-    ui.set_volume_text(snapshot.volume_text.as_str().into());
-    ui.set_volume_percent(snapshot.volume_percent.as_str().into());
-    ui.set_volume_progress(snapshot.volume_progress);
+fn apply_snapshot(ui: &SlaveWindow, snapshot: &DisplaySnapshot) {
+    // Note: pitch_note is e.g. "C#4" or "D5"
+    // We split it into name ("C#") and octave ("4")
+    let note_str = snapshot.pitch_note.as_str();
+    let mut name = String::new();
+    let mut octave = String::new();
+    for c in note_str.chars() {
+        if c.is_ascii_digit() || (c == '-' && octave.is_empty()) {
+            octave.push(c);
+        } else {
+            name.push(c);
+        }
+    }
+    ui.set_note_name(name.into());
+    ui.set_octave(octave.into());
+
+    // To get true cents, we would normally use fractional_note.
+    // In the simulator, pitch_progress maps 0..1 to -24..+24 semitones (if range is 24).
+    // Let's approximate: 0.5 is exactly base note.
+    let semitones = (snapshot.pitch_progress - 0.5) * 48.0; // 48 semitones total range
+    let cents = (semitones.fract()) * 100.0;
+    // Normalize to -50..+50
+    let true_cents = if cents > 50.0 {
+        cents - 100.0
+    } else if cents < -50.0 {
+        cents + 100.0
+    } else {
+        cents
+    };
+
+    ui.set_cents(true_cents);
+    ui.set_is_active(snapshot.volume_progress > 0.0);
 }
 
 fn start_and_run<F>(
@@ -113,7 +138,7 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
     }
 
     println!("🎸 Using Theremin Instrument Logic");
-    let ui = MainWindow::new().map_err(SimError::Ui)?;
+    let ui = SlaveWindow::new().map_err(SimError::Ui)?;
     let ui_handle = ui.as_weak();
 
     // The UI owns the main thread; the scenario runs in the background and pushes
