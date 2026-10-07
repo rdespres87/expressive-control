@@ -197,12 +197,12 @@ mod tests {
             |d| waits.push(d),
         );
 
-        // NoteOn + PitchBend for the first event, then a single PitchBend.
+        // NoteOn + PitchBend for the first event, then NoteOff + NoteOn + PitchBend.
         assert_eq!(
             report,
             ScenarioReport {
                 events_in: 2,
-                events_out: 3,
+                events_out: 5,
                 processing_errors: 0,
                 transport_errors: 0,
             }
@@ -210,12 +210,14 @@ mod tests {
         assert_eq!(
             transport.sent,
             vec![
-                vec![0x91, 60, 0],
+                vec![0x91, 60, 1], // NoteOn 60, vel 1 (prevent velocity 0)
                 vec![0xE1, 0x00, 0x40],
-                vec![0xE1, 0x7F, 0x7F]
+                vec![0x81, 60, 0],
+                vec![0x91, 84, 1],
+                vec![0xE1, 0x00, 0x40]
             ]
         );
-        assert_eq!(ui_events.len(), 3);
+        assert_eq!(ui_events.len(), 5);
         assert_eq!(
             waits,
             vec![Duration::from_millis(20), Duration::from_millis(30)]
@@ -236,10 +238,10 @@ mod tests {
             |_| {},
         );
 
-        assert_eq!(report.events_out, 3);
-        assert_eq!(report.transport_errors, 3);
+        assert_eq!(report.events_out, 5);
+        assert_eq!(report.transport_errors, 5);
         // The UI still mirrors what the instrument produced.
-        assert_eq!(ui_calls, 3);
+        assert_eq!(ui_calls, 5);
     }
 
     #[test]

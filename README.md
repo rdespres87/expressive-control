@@ -19,7 +19,7 @@ See:
 
 - **Core (`no_std`)**: Hardware-agnostic logic for translating sensor events into MPE MIDI events.
 - **Instruments (`no_std`)**: Reusable hardware-agnostic logic for specific instrument topologies (e.g., `instruments/theremin`).
-- **PC Simulator**: Reads sensor events from YAML scenarios (`scenario.yml`, `theremin_scenario.yml`), processes them through the Core/Instruments, and outputs MPE MIDI to a virtual MIDI port named "Expressive MPE Out" (macOS/Linux) that you can connect to your DAW.
+- **PC Simulator**: Reads sensor events from YAML scenarios (`scenario.yml`, `theremin_scenario.yml`), processes them through the Core/Instruments, and outputs MPE MIDI to a virtual MIDI port named "Expressive MPE Out" (macOS/Linux) that you can connect to your DAW. Includes advanced Theremin simulations (e.g. playing "Somewhere Over the Rainbow" with multi-octave glissando and vibrato over a standard +/- 2 semitone pitch bend range).
 - **Firmwares**: 
   - **nRF5340 (MPE Keyboard)**: Polls an I2C sensor array and outputs MIDI over USB. Supports HIL (Hardware-In-the-Loop) mode by receiving mocked sensor events from the PC simulator over UART.
   - **ESP32-S3 (ToF Theremin)**: *[WIP]* An `esp-idf` based firmware using VL53L4CD Time-of-Flight sensors mapped to pitch and volume, featuring a Slint UI on an Elecrow 5.0" Display.

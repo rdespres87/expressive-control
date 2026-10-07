@@ -70,22 +70,7 @@ fn apply_snapshot(ui: &SlaveWindow, snapshot: &DisplaySnapshot) {
     }
     ui.set_note_name(name.into());
     ui.set_octave(octave.into());
-
-    // To get true cents, we would normally use fractional_note.
-    // In the simulator, pitch_progress maps 0..1 to -24..+24 semitones (if range is 24).
-    // Let's approximate: 0.5 is exactly base note.
-    let semitones = (snapshot.pitch_progress - 0.5) * 48.0; // 48 semitones total range
-    let cents = (semitones.fract()) * 100.0;
-    // Normalize to -50..+50
-    let true_cents = if cents > 50.0 {
-        cents - 100.0
-    } else if cents < -50.0 {
-        cents + 100.0
-    } else {
-        cents
-    };
-
-    ui.set_cents(true_cents);
+    ui.set_cents(snapshot.pitch_cents);
     ui.set_is_active(snapshot.volume_progress > 0.0);
 }
 

@@ -12,12 +12,12 @@ export component SlaveWindow inherits Window {
     
     // UI Theme
     property <color> accent_color: #00f0ff; // Neon cyan
-    property <color> perfect_color: #00ffa6; // Mint green for perfect pitch
-    property <color> flat_color: #ffaa00; // Orange/Yellow for flat
-    property <color> sharp_color: #ff2a5f; // Pink/Red for sharp
+    property <color> perfect_color: #00ff00; // Green for perfect pitch
+    property <color> warning_color: #ffaa00; // Orange for slightly off
+    property <color> danger_color: #ff2a5f; // Red for very off
 
-    // Dynamic color logic: Green if within 3 cents, otherwise gradient-like logic
-    property <color> tune_color: !root.is_active ? #333340 : (abs(root.cents) < 3.0 ? perfect_color : (root.cents < 0 ? flat_color : sharp_color));
+    // Dynamic color logic: Green if within 5 cents, Orange if <= 15, Red beyond
+    property <color> tune_color: !root.is_active ? #333340 : (abs(root.cents) <= 5.0 ? perfect_color : (abs(root.cents) <= 15.0 ? warning_color : danger_color));
 
     VerticalLayout {
         alignment: center;
@@ -38,8 +38,8 @@ export component SlaveWindow inherits Window {
                 border-radius: 6px;
                 
                 // Active if cents is negative and absolute cents maps to this segment or further left
-                background: (root.is_active && root.cents < 0.0 && root.cents <= ((i - 20) * 2.5)) ? root.flat_color : #1a1a24;
-                drop-shadow-color: (root.is_active && root.cents < 0.0 && root.cents <= ((i - 20) * 2.5)) ? root.flat_color.with-alpha(0.5) : transparent;
+                background: (root.is_active && root.cents < 0.0 && root.cents <= ((i - 20) * 2.5)) ? root.tune_color : #1a1a24;
+                drop-shadow-color: (root.is_active && root.cents < 0.0 && root.cents <= ((i - 20) * 2.5)) ? root.tune_color.with-alpha(0.5) : transparent;
                 drop-shadow-blur: 8px;
                 animate background { duration: 80ms; }
                 animate drop-shadow-color { duration: 80ms; }
@@ -52,8 +52,8 @@ export component SlaveWindow inherits Window {
                 width: 16px;
                 height: 60px;
                 border-radius: 8px;
-                background: (root.is_active && abs(root.cents) <= 2.5) ? root.perfect_color : #333340;
-                drop-shadow-color: (root.is_active && abs(root.cents) <= 2.5) ? root.perfect_color.with-alpha(0.8) : transparent;
+                background: (root.is_active && abs(root.cents) <= 5.0) ? root.tune_color : #333340;
+                drop-shadow-color: (root.is_active && abs(root.cents) <= 5.0) ? root.tune_color.with-alpha(0.8) : transparent;
                 drop-shadow-blur: 15px;
                 animate background { duration: 150ms; }
             }
@@ -68,8 +68,8 @@ export component SlaveWindow inherits Window {
                 border-radius: 6px;
                 
                 // Active if cents > 0 and cents >= (i+1) * 2.5
-                background: (root.is_active && root.cents > 0.0 && root.cents >= ((i + 1) * 2.5)) ? root.sharp_color : #1a1a24;
-                drop-shadow-color: (root.is_active && root.cents > 0.0 && root.cents >= ((i + 1) * 2.5)) ? root.sharp_color.with-alpha(0.5) : transparent;
+                background: (root.is_active && root.cents > 0.0 && root.cents >= ((i + 1) * 2.5)) ? root.tune_color : #1a1a24;
+                drop-shadow-color: (root.is_active && root.cents > 0.0 && root.cents >= ((i + 1) * 2.5)) ? root.tune_color.with-alpha(0.5) : transparent;
                 drop-shadow-blur: 8px;
                 animate background { duration: 80ms; }
                 animate drop-shadow-color { duration: 80ms; }
@@ -99,14 +99,6 @@ export component SlaveWindow inherits Window {
             }
         }
         
-        // BOTTOM: Exact Cents Text
-        Text {
-            text: root.is_active ? round(root.cents) + " cents" : "STANDBY";
-            font-size: 20px;
-            font-weight: 600;
-            color: root.tune_color;
-            horizontal-alignment: center;
-            letter-spacing: 2px;
-        }
+        // BOTTOM: Exact Cents Text removed
     }
 }

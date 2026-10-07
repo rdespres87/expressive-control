@@ -16,6 +16,8 @@ use theremin::TofThereminProcessor;
 use esp_idf_hal::uart::{AsyncUartDriver, UartConfig};
 use crate::protocol::{MasterMessage, MAX_MESSAGE_SIZE};
 
+slint::include_modules!();
+
 pub mod protocol;
 
 /// Defines the hardware architecture the firmware is built for.
@@ -446,34 +448,68 @@ async fn run_slave() -> Result<(), FirmwareError> {
         &uart_config,
     ).context("UART init")?;
 
-    let mut cobs_buf = [0u8; MAX_MESSAGE_SIZE];
+    let window = SlaveWindow::new()
+        .map_err(|_| FirmwareError {
+            step: "Slint window creation",
+            source: ErrorSource::Esp(EspError::from_infallible::<{ esp_idf_sys::ESP_FAIL }>()),
+        })?;
+    let window_weak = window.as_weak();
 
-    log::info!("Entering Slave UART listen loop...");
-    loop {
-        let mut byte = [0u8; 1];
-        let mut idx = 0;
-        
-        loop {
-            // Read until COBS terminator 0x00
-            if uart.read(&mut byte).await.is_ok() && byte[0] != 0x00 {
-                if idx < cobs_buf.len() {
-                    cobs_buf[idx] = byte[0];
-                    idx += 1;
+    log::info!("Entering Slave UART listen loop in background thread...");
+    std::thread::spawn(move || {
+        esp_idf_hal::task::block_on(async move {
+            let mut cobs_buf = [0u8; MAX_MESSAGE_SIZE];
+            loop {
+                let mut byte = [0u8; 1];
+                let mut idx = 0;
+                
+                loop {
+                    // Read until COBS terminator 0x00
+                    if uart.read(&mut byte).await.is_ok() && byte[0] != 0x00 {
+                        if idx < cobs_buf.len() {
+                            cobs_buf[idx] = byte[0];
+                            idx += 1;
+                        }
+                    } else {
+                        break;
+                    }
                 }
-            } else {
-                break;
-            }
-        }
-        
-        if idx > 0 {
-            if let Ok(decoded_len) = cobs::decode_in_place(&mut cobs_buf[..idx]) {
-                if let Ok(msg) = postcard::from_bytes::<MasterMessage>(&cobs_buf[..decoded_len]) {
-                    log::info!("Received Telemetry: {:?}", msg);
-                    // TODO: Update Slint UI
+                
+                if idx > 0 {
+                    if let Ok(decoded_len) = cobs::decode_in_place(&mut cobs_buf[..idx]) {
+                        if let Ok(msg) = postcard::from_bytes::<MasterMessage>(&cobs_buf[..decoded_len]) {
+                            log::info!("Received Telemetry: {:?}", msg);
+                            
+                            let window_weak = window_weak.clone();
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(window) = window_weak.upgrade() {
+                                    match msg {
+                                        MasterMessage::Telemetry { midi_note, pitch_bend_cents, is_muted, .. } => {
+                                            window.set_is_active(!is_muted);
+                                            window.set_cents(pitch_bend_cents as f32);
+                                            
+                                            let note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                                            let name = note_names[(midi_note as usize) % 12];
+                                            let octave = (midi_note as i32 / 12) - 1;
+                                            window.set_note_string(format!("{}{}", name, octave).into());
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
                 }
             }
-        }
-    }
+        });
+    });
+
+    log::info!("Starting Slint UI event loop...");
+    window.run().map_err(|_| FirmwareError {
+        step: "Slint window run",
+        source: ErrorSource::Esp(EspError::from_infallible::<{ esp_idf_sys::ESP_FAIL }>()),
+    })?;
+    
+    Ok(())
 }
 
 fn main() {

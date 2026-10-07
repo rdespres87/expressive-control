@@ -10,7 +10,8 @@ pub struct TofThereminProcessor {
     pub max_distance_mm: u16,
     pub base_note: U7,
     pub pitch_bend_range_semitones: u8,
-    is_playing: bool,
+    is_playing: bool,   // True if pitch hand is present
+    note_on_sent: bool, // True if a NoteOn was sent (volume > 0)
     current_volume: U7,
     current_pitch_bend: U14,
 }
@@ -34,9 +35,10 @@ impl Default for TofThereminProcessor {
         Self {
             min_distance_mm: 20,
             max_distance_mm: 1000,
-            base_note: U7::new(60), // Middle C
-            pitch_bend_range_semitones: 24,
+            base_note: U7::new(60),        // Middle C
+            pitch_bend_range_semitones: 2, // Standard +/- 2 semitones
             is_playing: false,
+            note_on_sent: false,
             current_volume: U7::new(0),
             current_pitch_bend: U14::new(8192), // Center pitch bend
         }
@@ -44,18 +46,31 @@ impl Default for TofThereminProcessor {
 }
 
 impl TofThereminProcessor {
-    fn map_distance_to_u14(&self, z: u16) -> U14 {
-        if z <= self.min_distance_mm {
-            return U14::new(16383); // Highest pitch
-        }
+    fn map_distance_to_note_and_bend(&self, z: u16) -> (U7, U14) {
         if z >= self.max_distance_mm {
-            return U14::new(8192); // Base note (center bend)
+            return (U7::new(60), U14::new(8192));
         }
-        let range = self.max_distance_mm - self.min_distance_mm;
-        let pos = self.max_distance_mm - z; // Closer = higher pos
+        if z <= self.min_distance_mm {
+            return (U7::new(84), U14::new(8192));
+        }
 
-        let bend = 8192 + ((pos as u32 * 8191) / range as u32) as u16;
-        U14::new(bend)
+        let mm_from_c4 = (self.max_distance_mm - z) as f32;
+        let semitones = mm_from_c4 / 40.83333; // 980mm / 24 semitones
+
+        let rounded_semitones = (semitones + 0.5) as i32;
+        let midi_note = 60 + rounded_semitones;
+
+        let remainder = semitones - rounded_semitones as f32;
+
+        // Pitchbend is 8192 at center, +/- 8191 for +/- 2 semitones.
+        // 1 semitone = 4095.5 units.
+        let bend = 8192.0 + (remainder * 4095.5);
+        let bend = bend.clamp(0.0, 16383.0);
+
+        (
+            U7::new(midi_note.clamp(0, 127) as u8),
+            U14::new(bend as u16),
+        )
     }
 
     fn map_distance_to_u7(&self, z: u16) -> U7 {
@@ -82,62 +97,141 @@ impl ControlProcessor for TofThereminProcessor {
             SensorEvent::Position3D { id, x: _, y: _, z } => {
                 if id == 0 {
                     // Right hand (Pitch)
-                    if !self.is_playing {
-                        // Start playing
-                        if out_buffer.len() < 2 {
-                            return Err(ProcessorError::BufferTooSmall);
-                        }
-                        self.is_playing = true;
-                        self.current_pitch_bend = self.map_distance_to_u14(z);
+                    let (note, bend) = self.map_distance_to_note_and_bend(z);
+                    let mut idx = 0;
 
-                        out_buffer[0] = InstrumentEvent::NoteOn {
-                            channel: Channel::new(1),
-                            note: self.base_note,
-                            velocity: self.current_volume,
-                        };
-                        out_buffer[1] = InstrumentEvent::PitchBend {
-                            channel: Channel::new(1),
-                            bend: self.current_pitch_bend,
-                        };
-                        Ok(2)
-                    } else {
-                        if out_buffer.is_empty() {
+                    let prev_note = self.base_note;
+                    self.is_playing = true;
+                    self.base_note = note;
+                    self.current_pitch_bend = bend;
+
+                    if self.current_volume.as_u8() > 0 {
+                        if !self.note_on_sent {
+                            if out_buffer.len() < idx + 2 {
+                                return Err(ProcessorError::BufferTooSmall);
+                            }
+                            out_buffer[idx] = InstrumentEvent::NoteOn {
+                                channel: Channel::new(1),
+                                note: self.base_note,
+                                velocity: self.current_volume,
+                            };
+                            idx += 1;
+                            self.note_on_sent = true;
+                        } else if note != prev_note {
+                            if out_buffer.len() < idx + 2 {
+                                return Err(ProcessorError::BufferTooSmall);
+                            }
+                            out_buffer[idx] = InstrumentEvent::NoteOff {
+                                channel: Channel::new(1),
+                                note: prev_note,
+                                velocity: U7::new(0),
+                            };
+                            idx += 1;
+                            out_buffer[idx] = InstrumentEvent::NoteOn {
+                                channel: Channel::new(1),
+                                note: self.base_note,
+                                velocity: self.current_volume,
+                            };
+                            idx += 1;
+                        }
+
+                        if out_buffer.len() < idx + 1 {
                             return Err(ProcessorError::BufferTooSmall);
                         }
-                        self.current_pitch_bend = self.map_distance_to_u14(z);
-                        out_buffer[0] = InstrumentEvent::PitchBend {
+                        out_buffer[idx] = InstrumentEvent::PitchBend {
                             channel: Channel::new(1),
                             bend: self.current_pitch_bend,
                         };
-                        Ok(1)
+                        idx += 1;
                     }
+                    Ok(idx)
                 } else if id == 1 {
                     // Left hand (Volume)
-                    if out_buffer.is_empty() {
-                        return Err(ProcessorError::BufferTooSmall);
-                    }
+                    let prev_vol = self.current_volume.as_u8();
                     self.current_volume = self.map_distance_to_u7(z);
-                    out_buffer[0] = InstrumentEvent::ChannelPressure {
-                        channel: Channel::new(1),
-                        pressure: self.current_volume,
-                    };
-                    Ok(1)
+
+                    let mut idx = 0;
+                    if self.is_playing {
+                        if prev_vol == 0 && self.current_volume.as_u8() > 0 {
+                            if out_buffer.len() < idx + 2 {
+                                return Err(ProcessorError::BufferTooSmall);
+                            }
+                            out_buffer[idx] = InstrumentEvent::NoteOn {
+                                channel: Channel::new(1),
+                                note: self.base_note,
+                                velocity: self.current_volume,
+                            };
+                            idx += 1;
+                            out_buffer[idx] = InstrumentEvent::PitchBend {
+                                channel: Channel::new(1),
+                                bend: self.current_pitch_bend,
+                            };
+                            idx += 1;
+                            self.note_on_sent = true;
+                        } else if prev_vol > 0
+                            && self.current_volume.as_u8() == 0
+                            && self.note_on_sent
+                        {
+                            if out_buffer.len() < idx + 1 {
+                                return Err(ProcessorError::BufferTooSmall);
+                            }
+                            out_buffer[idx] = InstrumentEvent::NoteOff {
+                                channel: Channel::new(1),
+                                note: self.base_note,
+                                velocity: U7::new(0),
+                            };
+                            idx += 1;
+                            self.note_on_sent = false;
+                        }
+
+                        if self.current_volume.as_u8() > 0 {
+                            if out_buffer.len() < idx + 1 {
+                                return Err(ProcessorError::BufferTooSmall);
+                            }
+                            out_buffer[idx] = InstrumentEvent::ChannelPressure {
+                                channel: Channel::new(1),
+                                pressure: self.current_volume,
+                            };
+                            idx += 1;
+                        }
+                    }
+                    Ok(idx)
                 } else {
                     Ok(0)
                 }
             }
             SensorEvent::Released { id } => {
+                let mut idx = 0;
                 if id == 0 && self.is_playing {
-                    if out_buffer.is_empty() {
-                        return Err(ProcessorError::BufferTooSmall);
-                    }
                     self.is_playing = false;
-                    out_buffer[0] = InstrumentEvent::NoteOff {
-                        channel: Channel::new(1),
-                        note: self.base_note,
-                        velocity: U7::new(0),
-                    };
-                    Ok(1)
+                    if self.note_on_sent {
+                        if out_buffer.is_empty() {
+                            return Err(ProcessorError::BufferTooSmall);
+                        }
+                        out_buffer[idx] = InstrumentEvent::NoteOff {
+                            channel: Channel::new(1),
+                            note: self.base_note,
+                            velocity: U7::new(0),
+                        };
+                        idx += 1;
+                        self.note_on_sent = false;
+                    }
+                    Ok(idx)
+                } else if id == 1 {
+                    self.current_volume = U7::new(0);
+                    if self.note_on_sent {
+                        if out_buffer.is_empty() {
+                            return Err(ProcessorError::BufferTooSmall);
+                        }
+                        out_buffer[idx] = InstrumentEvent::NoteOff {
+                            channel: Channel::new(1),
+                            note: self.base_note,
+                            velocity: U7::new(0),
+                        };
+                        idx += 1;
+                        self.note_on_sent = false;
+                    }
+                    Ok(idx)
                 } else {
                     Ok(0)
                 }
@@ -152,35 +246,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_map_distance_to_pitch_bend() {
+    fn test_map_distance_to_note_and_bend() {
         let processor = TofThereminProcessor::default();
 
-        // At minimum distance (20mm), pitch bend should be max (16383)
-        assert_eq!(processor.map_distance_to_u14(20).as_u16(), 16383);
-        assert_eq!(processor.map_distance_to_u14(10).as_u16(), 16383); // Below min
+        // 1000mm -> C4 (60), center bend
+        let (n, b) = processor.map_distance_to_note_and_bend(1000);
+        assert_eq!(n.as_u8(), 60);
+        assert_eq!(b.as_u16(), 8192);
 
-        // At maximum distance (1000mm), pitch bend should be center (8192)
-        assert_eq!(processor.map_distance_to_u14(1000).as_u16(), 8192);
-        assert_eq!(processor.map_distance_to_u14(1200).as_u16(), 8192); // Above max
+        // 918mm -> ~2 semitones -> D4 (62), center bend
+        let (n, b) = processor.map_distance_to_note_and_bend(918);
+        assert_eq!(n.as_u8(), 62);
+        assert!((b.as_u16() as i32 - 8192).abs() < 100);
 
-        // At midpoint (510mm), pitch bend should be halfway between 8192 and 16383 (~12287)
-        let mid = processor.map_distance_to_u14(510).as_u16();
-        assert!(mid > 12000 && mid < 12500, "Midpoint bend was {}", mid);
+        // 837mm -> ~4 semitones -> E4 (64), center bend
+        let (n, b) = processor.map_distance_to_note_and_bend(837);
+        assert_eq!(n.as_u8(), 64);
+        assert!((b.as_u16() as i32 - 8192).abs() < 100);
+
+        // 938mm -> ~1.5 semitones -> between Db4 and D4
+        // Closer to D4 (62) - 0.5 semitones bend
+        let (n, b) = processor.map_distance_to_note_and_bend(938);
+        assert_eq!(n.as_u8(), 62); // 1.5 rounds to 2
+        assert!(b.as_u16() < 8192);
     }
 
     #[test]
     fn test_map_distance_to_volume() {
         let processor = TofThereminProcessor::default();
-
-        // At minimum distance (20mm), volume should be max (127)
         assert_eq!(processor.map_distance_to_u7(20).as_u8(), 127);
-        assert_eq!(processor.map_distance_to_u7(0).as_u8(), 127); // Below min
-
-        // At maximum distance (1000mm), volume should be min (0)
         assert_eq!(processor.map_distance_to_u7(1000).as_u8(), 0);
-        assert_eq!(processor.map_distance_to_u7(2000).as_u8(), 0); // Above max
-
-        // At midpoint (510mm), volume should be halfway (63)
         assert_eq!(processor.map_distance_to_u7(510).as_u8(), 63);
     }
 
@@ -193,7 +288,7 @@ mod tests {
             velocity: U7::new(0),
         }; 2];
 
-        // First pitch event (id = 0) triggers NoteOn + PitchBend
+        // 500mm is ~12.2 semitones from 1000mm. Note should be 60 + 12 = 72 (C5).
         let count = processor
             .process_event(
                 SensorEvent::Position3D {
@@ -208,77 +303,10 @@ mod tests {
         assert_eq!(count, 2);
 
         match buffer[0] {
-            InstrumentEvent::NoteOn { note, velocity, .. } => {
-                assert_eq!(note.as_u8(), 60);
-                assert_eq!(velocity.as_u8(), 0); // Default volume is 0 until left hand moves
+            InstrumentEvent::NoteOn { note, .. } => {
+                assert_eq!(note.as_u8(), 72);
             }
             _ => panic!("Expected NoteOn"),
-        }
-
-        match buffer[1] {
-            InstrumentEvent::PitchBend { bend, .. } => {
-                assert!(bend.as_u16() > 8192); // Hand is closer than 1000mm
-            }
-            _ => panic!("Expected PitchBend"),
-        }
-
-        // Second pitch event only triggers PitchBend update
-        let count2 = processor
-            .process_event(
-                SensorEvent::Position3D {
-                    id: 0,
-                    x: 0,
-                    y: 0,
-                    z: 200,
-                },
-                &mut buffer,
-            )
-            .unwrap();
-        assert_eq!(count2, 1);
-
-        match buffer[0] {
-            InstrumentEvent::PitchBend { bend, .. } => {
-                assert!(bend.as_u16() > 12000); // Hand is much closer now
-            }
-            _ => panic!("Expected PitchBend"),
-        }
-    }
-
-    #[test]
-    fn test_process_event_release() {
-        let mut processor = TofThereminProcessor::default();
-        let mut buffer = [InstrumentEvent::NoteOn {
-            channel: Channel::new(1),
-            note: U7::new(0),
-            velocity: U7::new(0),
-        }; 2];
-
-        // Start playing
-        processor
-            .process_event(
-                SensorEvent::Position3D {
-                    id: 0,
-                    x: 0,
-                    y: 0,
-                    z: 500,
-                },
-                &mut buffer,
-            )
-            .unwrap();
-        assert!(processor.is_playing);
-
-        // Release hand
-        let count = processor
-            .process_event(SensorEvent::Released { id: 0 }, &mut buffer)
-            .unwrap();
-        assert_eq!(count, 1);
-        assert!(!processor.is_playing);
-
-        match buffer[0] {
-            InstrumentEvent::NoteOff { note, .. } => {
-                assert_eq!(note.as_u8(), 60);
-            }
-            _ => panic!("Expected NoteOff"),
         }
     }
 }

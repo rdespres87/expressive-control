@@ -35,9 +35,11 @@ serde = { version = "1.0", default-features = false, features = ["derive"] }
 postcard = { version = "1.0", default-features = false }
 cobs = { version = "0.2.3", default-features = false }
 heapless = "0.8.0"
+slint = { version = "1.8.0", default-features = false, features = ["compat-1-2"] }
 
 [build-dependencies]
 embuild = "0.33.5"
+slint-build = "1.8.0"
 
 [[package.metadata.esp-idf-sys.extra_components]]
 remote_component = { name = "espressif/esp_tinyusb", version = "*" }

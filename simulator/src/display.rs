@@ -17,6 +17,7 @@ const NOTE_NAMES: [&str; 12] = [
 pub struct DisplaySnapshot {
     pub pitch_note: String,
     pub pitch_hz: String,
+    pub pitch_cents: f32,
     pub pitch_progress: f32,
     pub volume_text: String,
     pub volume_percent: String,
@@ -86,9 +87,13 @@ impl ThereminDisplay {
 
     pub fn snapshot(&self) -> DisplaySnapshot {
         let volume_ratio = f32::from(self.volume) / f32::from(MIDI_VALUE_MAX);
+        let fractional = self.fractional_note();
+        let cents = (fractional - fractional.round()) * 100.0;
+
         DisplaySnapshot {
-            pitch_note: note_name(self.fractional_note()),
+            pitch_note: note_name(fractional),
             pitch_hz: format!("{:.1} Hz", self.frequency_hz()),
+            pitch_cents: cents,
             pitch_progress: f32::from(self.bend) / f32::from(PITCH_BEND_MAX),
             volume_text: match volume_db(self.volume) {
                 Some(db) => format!("{db:.1} dB"),
