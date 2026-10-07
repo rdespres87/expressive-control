@@ -2,16 +2,20 @@
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum TunerState {
+    Off,
+    On {
+        midi_note: u8,
+        pitch_bend_cents: i8,
+    },
+}
+
 /// MasterMessage: Sent from the Master board (ToF sensors) to the Slave board (Screen)
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MasterMessage {
     /// Telemetry data sent at ~50Hz
-    Telemetry {
-        midi_note: u8,
-        pitch_bend_cents: i8,
-        volume: u8,
-        is_muted: bool,
-    },
+    Telemetry(TunerState),
     /// Acknowledgment of a config change
     ConfigAck,
 }

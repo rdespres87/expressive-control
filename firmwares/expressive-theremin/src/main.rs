@@ -14,7 +14,7 @@ use expressive_core::processor::ControlProcessor;
 use expressive_core::{InstrumentEvent, SensorEvent};
 use theremin::TofThereminProcessor;
 use esp_idf_hal::uart::{AsyncUartDriver, UartConfig};
-use crate::protocol::{MasterMessage, MAX_MESSAGE_SIZE};
+use crate::protocol::{MasterMessage, TunerState, MAX_MESSAGE_SIZE};
 
 slint::include_modules!();
 
@@ -305,12 +305,16 @@ async fn send_telemetry<T: esp_idf_hal::uart::Uart>(
     let bend_u14 = processor.current_pitch_bend();
     let bend_cents = (((bend_u14 as f32) - 8192.0) / 8192.0 * 50.0) as i8;
 
-    let msg = MasterMessage::Telemetry {
-        midi_note: processor.base_note.as_u8(),
-        pitch_bend_cents: bend_cents,
-        volume: processor.current_volume(),
-        is_muted: !processor.is_playing(),
+    let state = if processor.is_playing() {
+        TunerState::On {
+            midi_note: processor.base_note.as_u8(),
+            pitch_bend_cents: bend_cents,
+        }
+    } else {
+        TunerState::Off
     };
+
+    let msg = MasterMessage::Telemetry(state);
 
     let mut buf = [0u8; MAX_MESSAGE_SIZE];
     if let Ok(s_slice) = postcard::to_slice(&msg, &mut buf[..MAX_MESSAGE_SIZE - 2]) {
@@ -484,14 +488,21 @@ async fn run_slave() -> Result<(), FirmwareError> {
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(window) = window_weak.upgrade() {
                                     match msg {
-                                        MasterMessage::Telemetry { midi_note, pitch_bend_cents, is_muted, .. } => {
-                                            window.set_is_active(!is_muted);
-                                            window.set_cents(pitch_bend_cents as f32);
-                                            
-                                            let note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-                                            let name = note_names[(midi_note as usize) % 12];
-                                            let octave = (midi_note as i32 / 12) - 1;
-                                            window.set_note_string(format!("{}{}", name, octave).into());
+                                        MasterMessage::Telemetry(state) => {
+                                            match state {
+                                                TunerState::Off => {
+                                                    window.set_is_active(false);
+                                                }
+                                                TunerState::On { midi_note, pitch_bend_cents } => {
+                                                    window.set_is_active(true);
+                                                    window.set_cents(pitch_bend_cents as f32);
+                                                    
+                                                    let note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                                                    let name = note_names[(midi_note as usize) % 12];
+                                                    let octave = (midi_note as i32 / 12) - 1;
+                                                    window.set_note_string(format!("{}{}", name, octave).into());
+                                                }
+                                            }
                                         }
                                     }
                                 }
