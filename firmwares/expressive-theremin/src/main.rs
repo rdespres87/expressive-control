@@ -129,7 +129,7 @@ impl AsyncI2cWrapper<'_> {
         f: impl FnOnce(&mut I2cDriver<'static>) -> Result<R, I2cError>,
     ) -> Result<R, BusError> {
         let mut bus = self.0.try_borrow_mut().map_err(|_| BusError::Busy)?;
-        f(&mut *bus).map_err(BusError::I2c)
+        f(&mut bus).map_err(BusError::I2c)
     }
 }
 

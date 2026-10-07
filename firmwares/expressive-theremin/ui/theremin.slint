@@ -1,0 +1,225 @@
+export component MainWindow inherits Window {
+    width: 800px;
+    height: 480px;
+    background: #0d0d12;
+    title: "Expressive Theremin";
+
+    in property <string> pitch_note: "C4";
+    in property <string> pitch_hz: "261.63 Hz";
+    in property <float> pitch_progress: 0.5; // 0.0 to 1.0
+
+    in property <string> volume_text: "-8.5 dB";
+    in property <string> volume_percent: "75%";
+    in property <float> volume_progress: 0.75; // 0.0 to 1.0
+
+    // Colors
+    property <color> pitch_color: #00e5ff;
+    property <color> pitch_color_dim: #004d55;
+    property <color> vol_color: #b100ff;
+    property <color> vol_color_dim: #3b0055;
+    property <color> panel_bg: #151520;
+
+    VerticalLayout {
+        padding: 20px;
+        spacing: 10px;
+
+        // TOP BAR
+        HorizontalLayout {
+            height: 30px;
+            alignment: space-between;
+
+            // Left stats
+            HorizontalLayout {
+                spacing: 15px;
+                alignment: start;
+                Text { text: "🔋 94%"; color: #a0a0a0; font-size: 14px; vertical-alignment: center; }
+                Text { text: "📶"; color: #007aff; font-size: 14px; vertical-alignment: center; }
+                Text { text: "v1.2"; color: #606060; font-size: 14px; vertical-alignment: center; }
+            }
+
+            // Center Title
+            VerticalLayout {
+                alignment: center;
+                Text {
+                    text: "EXPRESSIVE";
+                    font-size: 12px;
+                    color: #808080;
+                    letter-spacing: 2px;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: "THEREMIN";
+                    font-size: 22px;
+                    font-weight: 800;
+                    color: #ffffff;
+                    letter-spacing: 4px;
+                    horizontal-alignment: center;
+                }
+            }
+
+            // Right stats
+            HorizontalLayout {
+                spacing: 15px;
+                alignment: end;
+                Text { text: "14:38"; color: #a0a0a0; font-size: 14px; vertical-alignment: center; }
+                Text { text: "⚙️"; color: #a0a0a0; font-size: 16px; vertical-alignment: center; }
+            }
+        }
+
+        // MAIN CONTENT
+        HorizontalLayout {
+            spacing: 40px;
+            alignment: center;
+            padding-top: 20px;
+            padding-bottom: 20px;
+
+            // PITCH PANEL
+            Rectangle {
+                width: 240px;
+                background: root.panel_bg;
+                border-radius: 16px;
+                border-width: 2px;
+                border-color: root.pitch_color.with-alpha(0.5);
+                
+                // Inner glow simulation
+                Rectangle {
+                    x: 2px; y: 2px; width: parent.width - 4px; height: parent.height - 4px;
+                    border-radius: 14px;
+                    border-width: 1px;
+                    border-color: root.pitch_color.with-alpha(0.2);
+                }
+
+                HorizontalLayout {
+                    padding: 20px;
+                    spacing: 20px;
+
+                    // Left Column (Text)
+                    VerticalLayout {
+                        alignment: space-around;
+                        width: 100px;
+
+                        Text { text: "PITCH"; font-size: 20px; font-weight: 700; color: root.pitch_color; horizontal-alignment: center; }
+                        
+                        VerticalLayout {
+                            spacing: 5px;
+                            Text { text: "Note"; font-size: 12px; color: #808080; horizontal-alignment: center; }
+                            Text { text: root.pitch_note; font-size: 42px; font-weight: 800; color: white; horizontal-alignment: center; }
+                        }
+
+                        VerticalLayout {
+                            spacing: 5px;
+                            Text { text: "Freq"; font-size: 12px; color: #808080; horizontal-alignment: center; }
+                            Text { text: root.pitch_hz; font-size: 20px; color: white; horizontal-alignment: center; }
+                        }
+                    }
+
+                    // Right Column (Segmented Bar)
+                    Rectangle {
+                        width: 60px;
+                        background: #000000;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: #333333;
+
+                        for i in 20 : Rectangle {
+                            x: 10px;
+                            y: parent.height - 10px - (i + 1) * ((parent.height - 20px) / 20);
+                            width: 40px;
+                            height: ((parent.height - 20px) / 20) - 4px;
+                            border-radius: 2px;
+                            background: (i / 20.0) < root.pitch_progress ? root.pitch_color : root.pitch_color_dim;
+                        }
+                    }
+                }
+            }
+
+            // CENTER WAVEFORM (Placeholder)
+            Rectangle {
+                width: 180px;
+                // A decorative center to balance the UI like in the mockup
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 15px;
+                    Text { text: "〰️〰️〰️"; font-size: 32px; color: root.pitch_color; horizontal-alignment: center; }
+                    Text { text: "〰️〰️〰️"; font-size: 32px; color: root.vol_color; horizontal-alignment: center; }
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 10px;
+                        Rectangle { width: 40px; height: 20px; border-radius: 10px; background: #333; Text { text: "REC"; color: #ff3333; font-size: 10px; horizontal-alignment: center; vertical-alignment: center;} }
+                        Rectangle { width: 40px; height: 20px; border-radius: 10px; background: #333; Text { text: "LFO"; color: white; font-size: 10px; horizontal-alignment: center; vertical-alignment: center;} }
+                    }
+                }
+            }
+
+            // VOLUME PANEL
+            Rectangle {
+                width: 240px;
+                background: root.panel_bg;
+                border-radius: 16px;
+                border-width: 2px;
+                border-color: root.vol_color.with-alpha(0.5);
+
+                // Inner glow simulation
+                Rectangle {
+                    x: 2px; y: 2px; width: parent.width - 4px; height: parent.height - 4px;
+                    border-radius: 14px;
+                    border-width: 1px;
+                    border-color: root.vol_color.with-alpha(0.2);
+                }
+
+                HorizontalLayout {
+                    padding: 20px;
+                    spacing: 20px;
+
+                    // Left Column (Segmented Bar)
+                    Rectangle {
+                        width: 60px;
+                        background: #000000;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: #333333;
+
+                        for i in 20 : Rectangle {
+                            x: 10px;
+                            y: parent.height - 10px - (i + 1) * ((parent.height - 20px) / 20);
+                            width: 40px;
+                            height: ((parent.height - 20px) / 20) - 4px;
+                            border-radius: 2px;
+                            background: (i / 20.0) < root.volume_progress ? root.vol_color : root.vol_color_dim;
+                        }
+                    }
+
+                    // Right Column (Text)
+                    VerticalLayout {
+                        alignment: space-around;
+                        width: 100px;
+
+                        Text { text: "VOLUME"; font-size: 20px; font-weight: 700; color: root.vol_color; horizontal-alignment: center; }
+                        
+                        VerticalLayout {
+                            spacing: 5px;
+                            Text { text: "Level"; font-size: 12px; color: #808080; horizontal-alignment: center; }
+                            Text { text: root.volume_percent; font-size: 42px; font-weight: 800; color: white; horizontal-alignment: center; }
+                        }
+
+                        VerticalLayout {
+                            spacing: 5px;
+                            Text { text: "Gain"; font-size: 12px; color: #808080; horizontal-alignment: center; }
+                            Text { text: root.volume_text; font-size: 20px; color: white; horizontal-alignment: center; }
+                        }
+                    }
+                }
+            }
+        }
+
+        // BOTTOM BAR
+        HorizontalLayout {
+            height: 30px;
+            alignment: space-around;
+            
+            Text { text: "MODE: CONTINUOUS"; color: #00e5ff; font-size: 12px; letter-spacing: 1px; vertical-alignment: center; }
+            Text { text: "RANGE: 3 OCT"; color: #808080; font-size: 12px; letter-spacing: 1px; vertical-alignment: center; }
+            Text { text: "STATUS: ACTIVE"; color: #b100ff; font-size: 12px; letter-spacing: 1px; vertical-alignment: center; }
+        }
+    }
+}

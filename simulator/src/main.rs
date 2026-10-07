@@ -1,131 +1,157 @@
-use expressive_core::midi::ToMidi;
-use expressive_core::processor::{ControlProcessor, MpeInstrument};
-use expressive_core::{Channel, InstrumentEvent, SensorEvent, U7};
-#[cfg(unix)]
-use midir::os::unix::VirtualOutput;
-use midir::MidiOutput;
-use serde::{Deserialize, Serialize};
-use std::fs;
+mod cli;
+mod display;
+mod error;
+mod runner;
+mod scenario;
+
+use std::process::ExitCode;
 use std::thread::sleep;
 use std::time::Duration;
 
-#[derive(Debug, Serialize, Deserialize)]
-struct SimulatorAction {
-    event: Option<SensorEvent>,
-    wait_ms: Option<u64>,
+use expressive_core::processor::{ControlProcessor, MpeInstrument};
+use expressive_core::{InstrumentEvent, MidiTransport, TransportError};
+#[cfg(unix)]
+use midir::os::unix::VirtualOutput;
+use midir::MidiOutputConnection;
+use theremin::TofThereminProcessor;
+
+use crate::cli::CliArgs;
+use crate::display::{DisplaySnapshot, ThereminDisplay};
+use crate::error::SimError;
+use crate::runner::{run_hil, run_scenario, ScenarioReport};
+use crate::scenario::Scenario;
+
+slint::include_modules!();
+
+/// Delay before replaying a scenario, leaving time to arm a DAW or a logic analyser.
+const START_DELAY: Duration = Duration::from_secs(3);
+const SERIAL_BAUD_RATE: u32 = 115_200;
+const SERIAL_TIMEOUT: Duration = Duration::from_millis(100);
+const MIDI_CLIENT_NAME: &str = "Expressive Simulator";
+const MIDI_PORT_NAME: &str = "Expressive MPE Out";
+
+/// `MidiTransport` backed by a midir output connection.
+struct MidirTransport(MidiOutputConnection);
+
+impl MidiTransport for MidirTransport {
+    fn send_bytes(&mut self, bytes: &[u8]) -> Result<(), TransportError> {
+        self.0.send(bytes).map_err(|e| {
+            eprintln!("  -> midir send error: {e}");
+            TransportError::HardwareDisconnected
+        })
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Scenario {
-    actions: Vec<SimulatorAction>,
+#[cfg(unix)]
+fn open_virtual_midi_port() -> Result<MidiOutputConnection, SimError> {
+    let midi_out = midir::MidiOutput::new(MIDI_CLIENT_NAME).map_err(SimError::MidiInit)?;
+    midi_out
+        .create_virtual(MIDI_PORT_NAME)
+        .map_err(|e| SimError::MidiConnect(e.to_string()))
 }
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
+#[cfg(not(unix))]
+fn open_virtual_midi_port() -> Result<MidiOutputConnection, SimError> {
+    Err(SimError::UnsupportedPlatform)
+}
 
-    // Find a `.yml` file in arguments, or default to scenario.yml
-    let scenario_path = args
-        .iter()
-        .find(|a| a.ends_with(".yml"))
-        .map(|s| s.as_str())
-        .unwrap_or("simulator/scenario.yml");
+fn apply_snapshot(ui: &MainWindow, snapshot: &DisplaySnapshot) {
+    ui.set_pitch_note(snapshot.pitch_note.as_str().into());
+    ui.set_pitch_hz(snapshot.pitch_hz.as_str().into());
+    ui.set_pitch_progress(snapshot.pitch_progress);
+    ui.set_volume_text(snapshot.volume_text.as_str().into());
+    ui.set_volume_percent(snapshot.volume_percent.as_str().into());
+    ui.set_volume_progress(snapshot.volume_progress);
+}
 
-    let is_hil = args.iter().any(|a| a.starts_with("/dev/"));
-    let is_theremin = scenario_path.contains("theremin");
+fn start_and_run<F>(
+    scenario: &Scenario,
+    instrument: &mut dyn ControlProcessor,
+    transport: &mut MidirTransport,
+    on_event: F,
+) -> ScenarioReport
+where
+    F: FnMut(&InstrumentEvent),
+{
+    println!(
+        "⏳ Starting simulation in {} seconds...\n",
+        START_DELAY.as_secs()
+    );
+    sleep(START_DELAY);
+    run_scenario(&scenario.actions, instrument, transport, on_event, sleep)
+}
 
-    println!("📄 Loading scenario: {}", scenario_path);
-    let yaml_content = fs::read_to_string(scenario_path).expect("Failed to read scenario file");
-    let scenario: Scenario = serde_yaml::from_str(&yaml_content).expect("Failed to parse YAML");
+fn run_hil_mode(port_name: &str, scenario: &Scenario) -> Result<(), SimError> {
+    println!("🎵 HIL Mode: Opening serial port {port_name}...");
+    let mut port = serialport::new(port_name, SERIAL_BAUD_RATE)
+        .timeout(SERIAL_TIMEOUT)
+        .open()
+        .map_err(SimError::SerialOpen)?;
 
-    if is_hil {
-        // HIL MODE
-        let port_name = args.iter().find(|a| a.starts_with("/dev/")).unwrap();
-        println!("🎵 HIL Mode: Opening serial port {}...", port_name);
-        let mut port = serialport::new(port_name, 115200)
-            .timeout(Duration::from_millis(100))
-            .open()
-            .expect("Failed to open serial port");
+    println!(
+        "⏳ Starting HIL simulation in {} seconds...\n",
+        START_DELAY.as_secs()
+    );
+    sleep(START_DELAY);
+    let report = run_hil(&scenario.actions, &mut port, sleep);
+    println!("✅ HIL Simulation complete: {report:?}");
+    Ok(())
+}
 
-        println!("⏳ Starting HIL simulation in 3 seconds...\n");
-        sleep(Duration::from_secs(3));
+fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
+    println!("💻 PC Simulation Mode");
+    let mut transport = MidirTransport(open_virtual_midi_port()?);
+    println!("🎵 Virtual MIDI port '{MIDI_PORT_NAME}' created!");
+    println!("👉 Please open your DAW (Ableton, Logic) or a Synth and listen to this port.");
 
-        for action in scenario.actions {
-            if let Some(event) = action.event {
-                println!("Injecting: {:?}", event);
-                let mut buf = [0u8; 32];
-                let serialized =
-                    postcard::to_slice_cobs(&event, &mut buf).expect("Failed to serialize");
+    if !is_theremin {
+        println!("🎹 Using MPE Keyboard Logic");
+        let mut instrument = MpeInstrument::default();
+        let report = start_and_run(&scenario, &mut instrument, &mut transport, |_| {});
+        println!("✅ PC Simulation complete: {report:?}");
+        return Ok(());
+    }
 
-                if let Err(e) = port.write_all(serialized) {
-                    println!("  -> Error sending to Serial: {}", e);
+    println!("🎸 Using Theremin Instrument Logic");
+    let ui = MainWindow::new().map_err(SimError::Ui)?;
+    let ui_handle = ui.as_weak();
+
+    // The UI owns the main thread; the scenario runs in the background and pushes
+    // display snapshots into the Slint event loop.
+    std::thread::spawn(move || {
+        let mut processor = TofThereminProcessor::default();
+        let mut display = ThereminDisplay::from_processor(&processor);
+        let report = start_and_run(&scenario, &mut processor, &mut transport, |event| {
+            if display.apply(event) {
+                let snapshot = display.snapshot();
+                let update =
+                    ui_handle.upgrade_in_event_loop(move |ui| apply_snapshot(&ui, &snapshot));
+                if let Err(e) = update {
+                    eprintln!("  -> UI update failed: {e}");
                 }
             }
+        });
+        println!("✅ PC Simulation complete: {report:?}");
+    });
 
-            if let Some(ms) = action.wait_ms {
-                sleep(Duration::from_millis(ms));
-            }
+    ui.run().map_err(SimError::Ui)
+}
+
+fn run(args: CliArgs) -> Result<(), SimError> {
+    println!("📄 Loading scenario: {}", args.scenario_path);
+    let scenario = Scenario::load(&args.scenario_path)?;
+    match args.serial_port.as_deref() {
+        Some(port_name) => run_hil_mode(port_name, &scenario),
+        None => run_pc_mode(scenario, args.is_theremin()),
+    }
+}
+
+fn main() -> ExitCode {
+    match run(CliArgs::parse(std::env::args())) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("❌ {e}");
+            ExitCode::FAILURE
         }
-        println!("✅ HIL Simulation complete.");
-    } else {
-        // PC SIMULATION MODE
-        println!("💻 PC Simulation Mode");
-        let midi_out =
-            MidiOutput::new("Expressive Simulator").expect("Failed to create MIDI output");
-
-        #[cfg(unix)]
-        let mut conn_out = midi_out
-            .create_virtual("Expressive MPE Out")
-            .expect("Failed to create virtual MIDI port");
-
-        #[cfg(not(unix))]
-        panic!("Virtual MIDI ports are only supported on macOS/Linux in this example.");
-
-        println!("🎵 Virtual MIDI port 'Expressive MPE Out' created!");
-        println!("👉 Please open your DAW (Ableton, Logic) or a Synth and listen to this port.");
-        println!("⏳ Starting simulation in 3 seconds...\n");
-        sleep(Duration::from_secs(3));
-
-        let mut mpe = MpeInstrument::default();
-        let mut theremin = theremin::TofThereminProcessor::default();
-
-        let instrument: &mut dyn ControlProcessor = if is_theremin {
-            println!("🎸 Using Theremin Instrument Logic");
-            &mut theremin
-        } else {
-            println!("🎹 Using MPE Keyboard Logic");
-            &mut mpe
-        };
-
-        let dummy_event = InstrumentEvent::NoteOff {
-            channel: Channel::new(0),
-            note: U7::new(0),
-            velocity: U7::new(0),
-        };
-        let mut out_buffer = [dummy_event; 16];
-
-        for action in scenario.actions {
-            if let Some(event) = action.event {
-                println!("Input: {:?}", event);
-                match instrument.process_event(event, &mut out_buffer) {
-                    Ok(count) => {
-                        for event_out in out_buffer.iter().take(count) {
-                            let midi_msg = event_out.to_midi();
-                            println!("  -> {:?} | Hex: {:02X?}", event_out, midi_msg.as_slice());
-                            if let Err(e) = conn_out.send(midi_msg.as_slice()) {
-                                println!("  -> Error sending MIDI: {}", e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        println!("  -> Error: {:?}", e);
-                    }
-                }
-            }
-
-            if let Some(ms) = action.wait_ms {
-                sleep(Duration::from_millis(ms));
-            }
-        }
-        println!("✅ PC Simulation complete. Closing port.");
     }
 }

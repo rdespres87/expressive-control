@@ -11,3 +11,7 @@ serde_yaml = "0.9"
 midir = "0.9"
 serialport = "4.3.0"
 postcard = { version = "1.0.8", features = ["use-std"] }
+slint = "1.8.0"
+
+[build-dependencies]
+slint-build = "1.8.0"
