@@ -78,21 +78,12 @@ Using **two** Elecrow 5.0" boards (one for each hand) is an excellent architectu
     *   **Volume Screen (Left Hand):** Can display a real-time oscilloscope, dynamic range settings (dB), and system menus.
 *   **Physical Modularity:** The two "towers" of the Theremin can be spaced freely according to the musician's morphology, without being constrained by a small central chassis.
 
-### 7.2 Communication Between the Boards
-Since each board reads its own ToF sensor, they must synchronize their data to generate a coherent MIDI stream. Three options are available:
+### 7.2 Communication & Hardware Impact
+*   **Power Supply:** A single Elecrow 5.0" screen draws ~400mA. Two boards will draw ~1A combined (5W). Modern Macs easily supply >30W per port, so a single USB connection to the Master board (which then powers the Slave board via its 5V expansion pins) will work perfectly without brownouts.
+*   **Sensor Topology:** To guarantee 0ms synchronization drift between the two hands, **BOTH VL53L4CD ToF sensors must be wired to the Master board**. 
+*   **Data Link:** The Master board and Slave board will communicate via a **Serial UART** cable (TX/RX/GND). 
 
-1.  **Wireless (ESP-NOW) - *Recommended*:**
-    *   Espressif's ESP-NOW protocol allows the two boards to communicate via direct Wi-Fi with ultra-low latency (**< 2 ms**).
-    *   **Advantage:** 100% wireless link between the two halves of the instrument! Only the "Master" screen needs a USB connection to the computer.
-2.  **Wired (Serial / UART):**
-    *   Requires 3 wires (TX, RX, GND) between the two boards.
-    *   **Advantage:** Zero latency, highly robust, very easy to implement, uses existing RX/TX pins.
-3.  **Wired (CAN Bus / TWAI):**
-    *   The automotive and pro-synth industry standard (e.g., Osmose). The ESP32 has a built-in CAN controller.
-    *   **Disadvantage:** Requires purchasing an additional component (CAN Transceiver).
-
-### 7.3 Impact on Firmware
-With this architecture, the current codebase will be slightly refactored:
-*   The firmware remains a single executable, but incorporates a **"Pitch (Slave)"** or **"Volume (Master)"** mode, configurable at boot.
-*   The **Pitch Board** reads its sensor and sends only the `Z` distance to the Volume board via ESP-NOW. It renders the Tuner UI.
-*   The **Volume Board** reads its sensor, receives the Pitch distance, feeds both into the `TofThereminProcessor`, generates USB MIDI, and renders the Main UI.
+### 7.3 Impact on Firmware (Master / Smart Display)
+With this architecture, the firmware incorporates a **"Master"** or **"Slave"** mode:
+*   The **Master Board (Volume Hand)** reads BOTH ToF sensors on its I2C bus, ensures perfect synchronization in the `TofThereminProcessor`, generates USB MIDI, and renders the Main Volume UI. It continuously sends lightweight UI telemetry over UART (e.g., "Draw note C4, detune +15 cents").
+*   The **Slave Board (Pitch Hand)** acts solely as a "Smart Display". It reads no sensors. It listens to the UART bus and renders the Strobe Tuner UI with fluid animations based on the telemetry it receives.

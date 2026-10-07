@@ -19,11 +19,11 @@ use theremin::TofThereminProcessor;
 pub enum ThereminMode {
     /// Legacy mode: One board reads both sensors and handles everything.
     SingleBoard,
-    /// Dual-board: This board is the "Volume/Master". It reads the Volume ToF,
-    /// receives Pitch distance via UART, and outputs USB MIDI.
+    /// Dual-board: This board is the "Master". It reads BOTH Volume and Pitch ToFs,
+    /// ensures perfect synchronization, outputs USB MIDI, and sends UI telemetry via UART.
     MasterBoard,
-    /// Dual-board: This board is the "Pitch/Slave". It reads the Pitch ToF
-    /// and streams the distance to the Master via UART.
+    /// Dual-board: This board is the "Slave" (Pitch display). It reads no sensors,
+    /// but receives UI telemetry via UART to render the Strobe Tuner.
     SlaveBoard,
 }
 
