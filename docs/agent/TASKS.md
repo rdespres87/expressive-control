@@ -27,5 +27,5 @@
 - [x] Implement Native USB-MIDI transport via TinyUSB
 - [x] Design Dual-Board Architecture and Mockups (Master + Slave with extension arms and wood unibody)
 - [x] Define UART protocol structure (COBS + Postcard) between Master and Slave
-- [ ] Implement UART telemetry transmission in Master (and remove `#![allow(dead_code)]` from `protocol.rs`)
+- [x] Implement UART telemetry transmission in Master (and remove `#![allow(dead_code)]` from `protocol.rs`)
 - [ ] Integrate Slint UI interface for the 5" touch display on Slave board
