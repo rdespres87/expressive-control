@@ -7,17 +7,18 @@ IN_PROGRESS
 V0.6 ToF Theremin Prototype (ESP32-S3)
 
 ## Current task
-Implement Slave UI interactivity and Slave-to-Master UART configuration messages (`SlaveMessage`).
+Design and implement a debug telemetry system for tracing MIDI messages, raw sensor values, and processor state.
 
 ## Last completed
 - Implemented actual VL53L4CD I2C driver with dual-sensor address initialization (`run_master`).
 - Implemented TinyUSB Native USB-MIDI transport.
 - Defined UART telemetry protocol (`TunerState`) and integrated Slint UI.
 - Simulated tuning search gliding in `theremin_scenario.yml`.
+- Rendered UI tuner as a strobe-style semi-circle arc gauge.
 
 ## Next action
-- Add touch interactivity to `theremin.slint` (e.g., buttons to change base octave and scale).
-- Implement `run_master` parsing of `SlaveMessage` to dynamically reconfigure `TofThereminProcessor`.
+- Design the debug telemetry structure (what events to trace, how to output them: RTT, UART, or USB Serial).
+- Postpone the Slint touch menu interactivity for later.
 
 ## Verification
 - cargo fmt --check: OK

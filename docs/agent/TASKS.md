@@ -28,4 +28,6 @@
 - [x] Design Dual-Board Architecture and Mockups (Master + Slave with extension arms and wood unibody)
 - [x] Define UART protocol structure (COBS + Postcard) between Master and Slave
 - [x] Implement UART telemetry transmission in Master (and remove `#![allow(dead_code)]` from `protocol.rs`)
-- [ ] Integrate Slint UI interface for the 5" touch display on Slave board
+- [x] Integrate Slint UI interface for the 5" touch display on Slave board (tuner gauge rendering)
+- [ ] Add touch interactivity to Slint UI for dynamically configuring octave and scale (`SlaveMessage` via UART)
+- [ ] Implement a debug telemetry system for tracing MIDI messages, raw sensor values, and processor state
