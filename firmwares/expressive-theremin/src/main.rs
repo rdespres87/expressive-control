@@ -20,8 +20,8 @@ const VL53L4CD_DEFAULT_ADDR: u8 = 0x29;
 const VOLUME_SENSOR_ADDR: u8 = 0x2A;
 /// 16-bit index of the VL53L4CD `I2C_SLAVE__DEVICE_ADDRESS` register.
 const REG_I2C_SLAVE_DEVICE_ADDRESS: [u8; 2] = [0x00, 0x01];
-/// Ranging timing budget (10 ms => ~100 Hz). Must stay within [10, 200] ms.
-const TIMING_BUDGET_MS: u32 = 10;
+/// Ranging timing budget (20 ms => ~50 Hz). 50Hz provides a more stable, less noisy signal than 100Hz for the Theremin.
+const TIMING_BUDGET_MS: u32 = 20;
 /// 0 selects continuous ranging mode.
 const INTER_MEASUREMENT_MS: u32 = 0;
 /// Delay before rebooting after a fatal error, so logs can be read on the console.
@@ -289,8 +289,7 @@ async fn run() -> Result<(), FirmwareError> {
     let mut xshut_volume = PinDriver::output(pins.gpio7).context("XSHUT volume pin")?;
     let mut int_pitch =
         PinDriver::input(pins.gpio4, Pull::Floating).context("INT pitch pin")?;
-    // Reserved for the volume sensor interrupt (not processed yet).
-    let _int_volume = PinDriver::input(pins.gpio5, Pull::Floating).context("INT volume pin")?;
+    let mut int_volume = PinDriver::input(pins.gpio5, Pull::Floating).context("INT volume pin")?;
 
     // Sequential boot: hold both sensors in reset, then wake them one by one so
     // each can be addressed individually on the shared bus.
@@ -323,35 +322,45 @@ async fn run() -> Result<(), FirmwareError> {
 
     log::info!("Entering main async interrupt loop...");
     loop {
-        // Runtime errors are transient (bus glitch, missed edge): log and keep playing.
-        if let Err(e) = int_pitch.wait_for_falling_edge().await {
-            log::error!("Pitch interrupt wait failed: {e:?}");
-            continue;
-        }
+        use embassy_futures::select::{select, Either};
 
-        let distance = match read_pending_distance(&mut sensor_pitch).await {
-            Ok(distance) => distance,
-            Err(e) => {
-                log::warn!("{e}");
-                continue;
-            }
-        };
-
-        let event_pitch = SensorEvent::Position3D {
-            id: 0,
-            x: 0,
-            y: 0,
-            z: distance,
-        };
-
-        match processor.process_event(event_pitch, &mut out_buffer) {
-            Ok(count) => {
-                for event in out_buffer.iter().take(count) {
-                    log::info!("Generated Event: {event:?}");
-                    send_usb_midi(event.to_midi().as_slice());
+        match select(int_pitch.wait_for_falling_edge(), int_volume.wait_for_falling_edge()).await {
+            Either::First(res) => {
+                if let Err(e) = res {
+                    log::error!("Pitch interrupt wait failed: {e:?}");
+                    continue;
+                }
+                match read_pending_distance(&mut sensor_pitch).await {
+                    Ok(distance) => {
+                        let event = SensorEvent::Position3D { id: 0, x: 0, y: 0, z: distance };
+                        if let Ok(count) = processor.process_event(event, &mut out_buffer) {
+                            for ev in out_buffer.iter().take(count) {
+                                log::info!("Generated Event (Pitch): {ev:?}");
+                                send_usb_midi(ev.to_midi().as_slice());
+                            }
+                        }
+                    }
+                    Err(e) => log::warn!("{e}"),
                 }
             }
-            Err(e) => log::warn!("Theremin processing failed: {e:?}"),
+            Either::Second(res) => {
+                if let Err(e) = res {
+                    log::error!("Volume interrupt wait failed: {e:?}");
+                    continue;
+                }
+                match read_pending_distance(&mut sensor_vol).await {
+                    Ok(distance) => {
+                        let event = SensorEvent::Position3D { id: 1, x: 0, y: 0, z: distance };
+                        if let Ok(count) = processor.process_event(event, &mut out_buffer) {
+                            for ev in out_buffer.iter().take(count) {
+                                log::info!("Generated Event (Volume): {ev:?}");
+                                send_usb_midi(ev.to_midi().as_slice());
+                            }
+                        }
+                    }
+                    Err(e) => log::warn!("{e}"),
+                }
+            }
         }
     }
 }
