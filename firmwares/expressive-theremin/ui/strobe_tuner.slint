@@ -1,0 +1,109 @@
+import { Theme } from "theme.slint";
+
+export component PitchDisplay inherits Rectangle {
+    in property <string> note_name: "C#";
+    in property <int> octave: 4;
+    in property <float> cents_detune: 0.0; // -50.0 to 50.0
+
+    background: Theme.background;
+    
+    // -50 cents = -90 deg (left), 0 cents = 0 deg (top), +50 cents = +90 deg (right)
+    property <float> needle_angle: (cents_detune / 50.0) * 90.0;
+    
+    VerticalLayout {
+        padding: 40px;
+        spacing: 20px;
+        alignment: center;
+        
+        // Tuner Area
+        Rectangle {
+            width: 340px;
+            height: 220px;
+            
+            // 180-degree Arc Track (Top half circle)
+            Path {
+                x: 20px;
+                y: 20px;
+                width: 300px;
+                height: 150px;
+                // Move to (0,150), Arc to (300,150) with radius 150
+                commands: "M 0 150 A 150 150 0 0 1 300 150";
+                stroke: Theme.surface;
+                stroke-width: 12px;
+                fill: transparent;
+            }
+            
+            // Center target notch (0 cents / 12 o'clock)
+            Rectangle {
+                x: 170px - 3px;
+                y: 10px;
+                width: 6px;
+                height: 20px;
+                background: Theme.text-dim;
+                border-radius: 3px;
+            }
+            
+            // Rotating Needle
+            Rectangle {
+                x: 170px - 4px;
+                y: 20px;
+                width: 8px;
+                height: 150px;
+                // Invisible container to hold the colored tip
+                background: transparent;
+                
+                // Pivot at the bottom center (150px down)
+                rotation-origin-x: 4px;
+                rotation-origin-y: 150px;
+                rotation-angle: root.needle_angle * 1deg;
+                
+                animate rotation-angle { duration: 100ms; easing: ease-out-quad; }
+                
+                // The visible glowing tip of the needle
+                Rectangle {
+                    x: 0;
+                    y: -10px;
+                    width: 8px;
+                    height: 24px;
+                    border-radius: 4px;
+                    background: (root.cents_detune > -5.0 && root.cents_detune < 5.0) ? Theme.accent-secondary : Theme.accent-primary;
+                    animate background { duration: 150ms; }
+                }
+            }
+            
+            // Central Note & Octave
+            HorizontalLayout {
+                y: 70px; // Push down into the semi-circle
+                alignment: center;
+                spacing: 5px;
+                
+                Text {
+                    text: root.note_name;
+                    font-family: Theme.font-family;
+                    font-size: 140px;
+                    font-weight: 800;
+                    color: Theme.text-bright;
+                }
+                
+                Text {
+                    text: root.octave;
+                    font-family: Theme.font-family;
+                    font-size: 50px;
+                    font-weight: 700;
+                    color: Theme.accent-secondary;
+                    y: 90px; // Baseline align
+                }
+            }
+        }
+        
+        // Exact Cents Value
+        Text {
+            text: (root.cents_detune > 0 ? "+" : "") + round(root.cents_detune) + " ¢";
+            font-family: Theme.font-family;
+            font-size: 24px;
+            font-weight: 700;
+            color: Theme.text-dim;
+            horizontal-alignment: center;
+        }
+    }
+}
