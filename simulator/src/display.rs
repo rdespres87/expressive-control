@@ -1,3 +1,4 @@
+#[cfg(test)]
 use expressive_core::InstrumentEvent;
 use theremin::TofThereminProcessor;
 
@@ -35,6 +36,7 @@ pub struct ThereminDisplay {
 }
 
 impl ThereminDisplay {
+    #[cfg(test)]
     pub fn new(base_note: u8, bend_range_semitones: u8) -> Self {
         Self {
             base_note,
@@ -46,13 +48,16 @@ impl ThereminDisplay {
 
     /// Mirrors the tuning of a theremin processor.
     pub fn from_processor(processor: &TofThereminProcessor) -> Self {
-        Self::new(
-            processor.base_note.as_u8(),
-            processor.pitch_bend_range_semitones,
-        )
+        Self {
+            base_note: processor.base_note.as_u8(),
+            bend_range_semitones: processor.pitch_bend_range_semitones,
+            bend: processor.current_pitch_bend(),
+            volume: processor.current_volume(),
+        }
     }
 
     /// Updates the state from an instrument event. Returns `true` if the display changed.
+    #[cfg(test)]
     pub fn apply(&mut self, event: &InstrumentEvent) -> bool {
         let before = *self;
         match *event {

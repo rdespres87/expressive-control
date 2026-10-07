@@ -26,16 +26,19 @@ pub struct ScenarioReport {
 /// Replays `actions` through `instrument` and sends the resulting MIDI bytes to
 /// `transport`. `on_event` is called for every produced instrument event (UI hook)
 /// and `wait` performs the scenario pauses (injectable so tests do not sleep).
-pub fn run_scenario<T, F, W>(
+pub fn run_scenario<C, T, F, A, W>(
     actions: &[SimulatorAction],
-    instrument: &mut dyn ControlProcessor,
+    instrument: &mut C,
     transport: &mut T,
     mut on_event: F,
+    mut on_action_done: A,
     mut wait: W,
 ) -> ScenarioReport
 where
+    C: ControlProcessor,
     T: MidiTransport + ?Sized,
     F: FnMut(&InstrumentEvent),
+    A: FnMut(&C),
     W: FnMut(Duration),
 {
     let placeholder = InstrumentEvent::NoteOff {
@@ -69,6 +72,8 @@ where
                 }
             }
         }
+
+        on_action_done(instrument);
 
         if let Some(ms) = action.wait_ms {
             wait(Duration::from_millis(ms));
@@ -206,6 +211,7 @@ mod tests {
             &mut processor,
             &mut transport,
             |e| ui_events.push(*e),
+            |_| {}, // ignore action done
             |d| waits.push(d),
         );
 
@@ -262,6 +268,7 @@ mod tests {
             &mut FailingTransport,
             |_| ui_calls += 1,
             |_| {},
+            |_| {},
         );
 
         // Volume event generates nothing (!is_playing).
@@ -288,7 +295,14 @@ mod tests {
         let mut instrument = MpeInstrument::default();
         let mut transport = RecordingTransport::default();
 
-        let report = run_scenario(&actions, &mut instrument, &mut transport, |_| {}, |_| {});
+        let report = run_scenario(
+            &actions,
+            &mut instrument,
+            &mut transport,
+            |_| {},
+            |_| {},
+            |_| {},
+        );
 
         assert_eq!(report.events_in, 16);
         assert_eq!(report.processing_errors, 1);
@@ -300,7 +314,7 @@ mod tests {
     fn empty_scenario_does_nothing() {
         let mut processor = TofThereminProcessor::default();
         let mut transport = RecordingTransport::default();
-        let report = run_scenario(&[], &mut processor, &mut transport, |_| {}, |_| {});
+        let report = run_scenario(&[], &mut processor, &mut transport, |_| {}, |_| {}, |_| {});
         assert_eq!(report, ScenarioReport::default());
         assert!(transport.sent.is_empty());
     }

@@ -9,7 +9,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use expressive_core::processor::{ControlProcessor, MpeInstrument};
-use expressive_core::{InstrumentEvent, MidiTransport, TransportError};
+use expressive_core::{MidiTransport, TransportError};
 #[cfg(unix)]
 use midir::os::unix::VirtualOutput;
 use midir::MidiOutputConnection;
@@ -74,21 +74,29 @@ fn apply_snapshot(ui: &SlaveWindow, snapshot: &DisplaySnapshot) {
     ui.set_is_active(snapshot.volume_progress > 0.0);
 }
 
-fn start_and_run<F>(
+fn start_and_run<C, A>(
     scenario: &Scenario,
-    instrument: &mut dyn ControlProcessor,
+    instrument: &mut C,
     transport: &mut MidirTransport,
-    on_event: F,
+    on_action_done: A,
 ) -> ScenarioReport
 where
-    F: FnMut(&InstrumentEvent),
+    C: ControlProcessor,
+    A: FnMut(&C),
 {
     println!(
         "⏳ Starting simulation in {} seconds...\n",
         START_DELAY.as_secs()
     );
     sleep(START_DELAY);
-    run_scenario(&scenario.actions, instrument, transport, on_event, sleep)
+    run_scenario(
+        &scenario.actions,
+        instrument,
+        transport,
+        |_| {},
+        on_action_done,
+        sleep,
+    )
 }
 
 fn run_hil_mode(port_name: &str, scenario: &Scenario) -> Result<(), SimError> {
@@ -130,15 +138,12 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
     // display snapshots into the Slint event loop.
     std::thread::spawn(move || {
         let mut processor = TofThereminProcessor::default();
-        let mut display = ThereminDisplay::from_processor(&processor);
-        let report = start_and_run(&scenario, &mut processor, &mut transport, |event| {
-            if display.apply(event) {
-                let snapshot = display.snapshot();
-                let update =
-                    ui_handle.upgrade_in_event_loop(move |ui| apply_snapshot(&ui, &snapshot));
-                if let Err(e) = update {
-                    eprintln!("  -> UI update failed: {e}");
-                }
+        let report = start_and_run(&scenario, &mut processor, &mut transport, |proc| {
+            let display = ThereminDisplay::from_processor(proc);
+            let snapshot = display.snapshot();
+            let update = ui_handle.upgrade_in_event_loop(move |ui| apply_snapshot(&ui, &snapshot));
+            if let Err(e) = update {
+                eprintln!("  -> UI update failed: {e}");
             }
         });
         println!("✅ PC Simulation complete: {report:?}");
