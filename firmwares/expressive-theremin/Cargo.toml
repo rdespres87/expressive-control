@@ -10,7 +10,10 @@ rust-version = "1.82"
 name = "expressive-theremin"
 harness = false # do not use the built-in cargo test harness -> resolve rust-analyzer errors
 
-
+[features]
+default = ["master"]
+master = []
+slave = []
 
 [dependencies]
 log = "0.4"

@@ -33,7 +33,11 @@ pub enum ThereminMode {
 
 /// Change this constant to build for the desired board.
 /// (In the future, we could read a GPIO pin at boot to set this dynamically).
-const BOARD_MODE: ThereminMode = ThereminMode::SingleBoard;
+#[cfg(feature = "slave")]
+const BOARD_MODE: ThereminMode = ThereminMode::SlaveBoard;
+
+#[cfg(not(feature = "slave"))]
+const BOARD_MODE: ThereminMode = ThereminMode::MasterBoard;
 
 /// Default 7-bit I2C address of a VL53L4CD after power-up.
 const VL53L4CD_DEFAULT_ADDR: u8 = 0x29;
