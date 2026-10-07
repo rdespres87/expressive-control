@@ -183,7 +183,19 @@ mod tests {
 
     #[test]
     fn theremin_scenario_produces_midi_and_ui_events() {
-        let actions = [event(pitch(1000)), pause(20), event(pitch(20)), pause(30)];
+        let actions = [
+            event(SensorEvent::Position3D {
+                id: 1,
+                x: 0,
+                y: 0,
+                z: 20,
+            }), // Set volume
+            pause(10),
+            event(pitch(1000)),
+            pause(20),
+            event(pitch(20)),
+            pause(30),
+        ];
         let mut processor = TofThereminProcessor::default();
         let mut transport = RecordingTransport::default();
         let mut ui_events = Vec::new();
@@ -197,11 +209,12 @@ mod tests {
             |d| waits.push(d),
         );
 
-        // NoteOn + PitchBend for the first event, then NoteOff + NoteOn + PitchBend.
+        // Volume event generates nothing (!is_playing).
+        // First pitch generates NoteOn + PitchBend. Second pitch generates NoteOff + NoteOn + PitchBend.
         assert_eq!(
             report,
             ScenarioReport {
-                events_in: 2,
+                events_in: 3,
                 events_out: 5,
                 processing_errors: 0,
                 transport_errors: 0,
@@ -210,23 +223,36 @@ mod tests {
         assert_eq!(
             transport.sent,
             vec![
-                vec![0x91, 60, 1], // NoteOn 60, vel 1 (prevent velocity 0)
+                vec![0x91, 60, 127], // NoteOn 60, vel 127
                 vec![0xE1, 0x00, 0x40],
                 vec![0x81, 60, 0],
-                vec![0x91, 84, 1],
+                vec![0x91, 84, 127],
                 vec![0xE1, 0x00, 0x40]
             ]
         );
         assert_eq!(ui_events.len(), 5);
         assert_eq!(
             waits,
-            vec![Duration::from_millis(20), Duration::from_millis(30)]
+            vec![
+                Duration::from_millis(10),
+                Duration::from_millis(20),
+                Duration::from_millis(30)
+            ]
         );
     }
 
     #[test]
     fn transport_errors_are_counted_not_fatal() {
-        let actions = [event(pitch(500)), event(pitch(400))];
+        let actions = [
+            event(SensorEvent::Position3D {
+                id: 1,
+                x: 0,
+                y: 0,
+                z: 20,
+            }), // Set volume
+            event(pitch(500)),
+            event(pitch(400)),
+        ];
         let mut processor = TofThereminProcessor::default();
         let mut ui_calls = 0;
 
@@ -238,6 +264,8 @@ mod tests {
             |_| {},
         );
 
+        // Volume event generates nothing (!is_playing).
+        // First pitch: NoteOn + PitchBend (2). Second pitch: NoteOff + NoteOn + PitchBend (3).
         assert_eq!(report.events_out, 5);
         assert_eq!(report.transport_errors, 5);
         // The UI still mirrors what the instrument produced.

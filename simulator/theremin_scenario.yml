@@ -10,11 +10,11 @@ actions:
   # Tuning to "Some" (C4) while muted
   # -------------------------
   - event: !Position3D { id: 0, x: 0, y: 0, z: 960 } # A bit sharp
-  - wait_ms: 300
+  - wait_ms: 500
   - event: !Position3D { id: 0, x: 0, y: 0, z: 1030 } # Overshoot, a bit flat
-  - wait_ms: 300
+  - wait_ms: 500
   - event: !Position3D { id: 0, x: 0, y: 0, z: 1000 } # Found perfect C4!
-  - wait_ms: 400
+  - wait_ms: 800
 
   # Fade in volume to play "Some"
   - event: !Position3D { id: 1, x: 0, y: 0, z: 500 }
@@ -60,11 +60,11 @@ actions:
   # Tuning to "O" (B4) while muted
   # -------------------------
   - event: !Position3D { id: 0, x: 0, y: 0, z: 540 } # Sharp
-  - wait_ms: 100
+  - wait_ms: 300
   - event: !Position3D { id: 0, x: 0, y: 0, z: 560 } # Flat
-  - wait_ms: 100
+  - wait_ms: 300
   - event: !Position3D { id: 0, x: 0, y: 0, z: 551 } # Perfect B4
-  - wait_ms: 200
+  - wait_ms: 500
 
   # Fade in volume to play "O"
   - event: !Position3D { id: 1, x: 0, y: 0, z: 400 }

@@ -288,6 +288,18 @@ mod tests {
             velocity: U7::new(0),
         }; 2];
 
+        processor
+            .process_event(
+                SensorEvent::Position3D {
+                    id: 1,
+                    x: 0,
+                    y: 0,
+                    z: 20,
+                },
+                &mut buffer,
+            )
+            .unwrap();
+
         // 500mm is ~12.2 semitones from 1000mm. Note should be 60 + 12 = 72 (C5).
         let count = processor
             .process_event(
