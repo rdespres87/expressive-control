@@ -7,23 +7,23 @@ IN_PROGRESS
 V0.6 ToF Theremin Prototype (ESP32-S3)
 
 ## Current task
-Select next component to implement (VL53L5CX Driver, USB MIDI, or GUI).
+Implement Slave UI interactivity and Slave-to-Master UART configuration messages (`SlaveMessage`).
 
 ## Last completed
-- Scaffolding of the `firmwares/expressive-theremin` with `esp-idf` for ESP32-S3.
-- Refactored `main.rs` to use an interrupt-driven async architecture (`wait_for_falling_edge().await`).
-- Resolved Cargo workspace profile compatibility issues.
-- Updated `simulator` to support dynamic dispatch and `Position3D` theremin simulation testing.
-- Created `theremin_scenario.yml` for local testing on Mac/PC.
+- Implemented actual VL53L4CD I2C driver with dual-sensor address initialization (`run_master`).
+- Implemented TinyUSB Native USB-MIDI transport.
+- Defined UART telemetry protocol (`TunerState`) and integrated Slint UI.
+- Simulated tuning search gliding in `theremin_scenario.yml`.
 
 ## Next action
-- Implement actual VL53L5CX I2C communication in the firmware.
+- Add touch interactivity to `theremin.slint` (e.g., buttons to change base octave and scale).
+- Implement `run_master` parsing of `SlaveMessage` to dynamically reconfigure `TofThereminProcessor`.
 
 ## Verification
 - cargo fmt --check: OK
 - cargo check: OK
 - cargo clippy: OK
-- Simulator passes `cargo run -p simulator -- simulator/theremin_scenario.yml` without crashing.
+- Simulator passes `cargo run -p simulator -- simulator/theremin_scenario.yml`.
 
 ## Blockers
 - The `espup` toolchain (`xtensa-esp32s3-espidf`) is needed to compile the firmware locally, preventing `cargo build` on the firmware crate for now.
