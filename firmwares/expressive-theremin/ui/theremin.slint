@@ -24,21 +24,20 @@ export component SlaveWindow inherits Window {
         spacing: 10px;
         
         // TOP: Half-Moon Tuner Gauge
-        Rectangle {
+        gauge := Rectangle {
             height: 220px;
             width: 100%;
             
+            property <float> r: 160.0;
+            property <float> cx: self.width / 1px / 2.0;
+            property <float> cy: 210.0;
+            
             // 41 segments in the half moon (-90 to +90 degrees)
-            // i=0 is furthest left (-50 cents), i=20 is center (0 cents), i=40 is furthest right (+50 cents)
-            // Total range is 100 cents. Each tick is 100 / 40 = 2.5 cents.
             for i in 41: Path {
-                property <angle> a: -90deg + i * 4.5deg;
+                property <angle> a1: -90deg + i * 4.5deg;
+                // Leave a gap between segments (e.g., span 3.5 deg, gap 1.0 deg)
+                property <angle> a2: -90deg + i * 4.5deg + 3.5deg;
                 property <float> tick_cents: -50.0 + i * 2.5;
-                
-                property <float> inner_r: 150.0;
-                property <float> outer_r: (i == 20) ? 190.0 : 180.0;
-                property <float> cx: parent.width / 1px / 2.0;
-                property <float> cy: 210.0;
                 
                 // Active logic:
                 property <bool> is_lit: root.is_active && (
@@ -48,18 +47,29 @@ export component SlaveWindow inherits Window {
                 );
 
                 stroke: is_lit ? root.tune_color : #1a1a24;
-                stroke-width: (i == 20) ? 10px : 6px;
+                stroke-width: (i == 20) ? 30px : 20px;
                 
                 MoveTo {
-                    x: cx + inner_r * sin(a);
-                    y: cy - inner_r * cos(a);
+                    x: gauge.cx + gauge.r * sin(a1);
+                    y: gauge.cy - gauge.r * cos(a1);
                 }
-                LineTo {
-                    x: cx + outer_r * sin(a);
-                    y: cy - outer_r * cos(a);
+                ArcTo {
+                    radius-x: gauge.r;
+                    radius-y: gauge.r;
+                    x: gauge.cx + gauge.r * sin(a2);
+                    y: gauge.cy - gauge.r * cos(a2);
+                    sweep: true; // clockwise
                 }
-
+                
                 animate stroke { duration: 80ms; }
+            }
+            
+            // Add a discrete center tick marker
+            Path {
+                stroke: root.is_active && abs(root.cents) < 2.5 ? root.perfect_color : #ffffff;
+                stroke-width: 4px;
+                MoveTo { x: gauge.cx; y: gauge.cy - gauge.r - 20.0; }
+                LineTo { x: gauge.cx; y: gauge.cy - gauge.r + 20.0; }
             }
         }
         
