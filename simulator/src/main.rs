@@ -71,7 +71,7 @@ fn apply_snapshot(ui: &SlaveWindow, snapshot: &DisplaySnapshot) {
     ui.set_note_name(name.into());
     ui.set_octave(octave.into());
     ui.set_cents(snapshot.pitch_cents);
-    ui.set_is_active(snapshot.volume_progress > 0.0);
+    ui.set_is_active(snapshot.is_playing);
 }
 
 fn start_and_run<C, A>(

@@ -23,6 +23,7 @@ pub struct DisplaySnapshot {
     pub volume_text: String,
     pub volume_percent: String,
     pub volume_progress: f32,
+    pub is_playing: bool,
 }
 
 /// Tracks the theremin state from the MIDI events it emits, independently of any
@@ -33,6 +34,7 @@ pub struct ThereminDisplay {
     bend_range_semitones: u8,
     bend: u16,
     volume: u8,
+    is_playing: bool,
 }
 
 impl ThereminDisplay {
@@ -43,6 +45,7 @@ impl ThereminDisplay {
             bend_range_semitones,
             bend: PITCH_BEND_CENTER,
             volume: 0,
+            is_playing: false,
         }
     }
 
@@ -53,6 +56,7 @@ impl ThereminDisplay {
             bend_range_semitones: processor.pitch_bend_range_semitones,
             bend: processor.current_pitch_bend(),
             volume: processor.current_volume(),
+            is_playing: processor.is_playing(),
         }
     }
 
@@ -106,6 +110,7 @@ impl ThereminDisplay {
             },
             volume_percent: format!("{:.0}%", volume_ratio * 100.0),
             volume_progress: volume_ratio,
+            is_playing: self.is_playing,
         }
     }
 }
