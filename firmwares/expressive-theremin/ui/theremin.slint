@@ -23,56 +23,43 @@ export component SlaveWindow inherits Window {
         alignment: center;
         spacing: 10px;
         
-        // TOP: Segmented Bargraph Gauge
+        // TOP: Half-Moon Tuner Gauge
         Rectangle {
-            height: 140px;
+            height: 220px;
             width: 100%;
             
-            // 20 segments on the flat (left) side
-            for i in 20: Rectangle {
-                // i goes from 0 to 19. i=0 is furthest left, i=19 is closest to center.
-                x: 30px + i * ((parent.width / 2 - 50px) / 20);
-                y: 50px;
-                width: ((parent.width / 2 - 50px) / 20) - 4px;
-                height: 40px;
-                border-radius: 6px;
+            // 41 segments in the half moon (-90 to +90 degrees)
+            // i=0 is furthest left (-50 cents), i=20 is center (0 cents), i=40 is furthest right (+50 cents)
+            // Total range is 100 cents. Each tick is 100 / 40 = 2.5 cents.
+            for i in 41: Path {
+                property <angle> a: -90deg + i * 4.5deg;
+                property <float> tick_cents: -50.0 + i * 2.5;
                 
-                // Active if cents is negative and absolute cents maps to this segment or further left
-                background: (root.is_active && root.cents < 0.0 && root.cents <= ((i - 20) * 2.5)) ? root.tune_color : #1a1a24;
-                drop-shadow-color: (root.is_active && root.cents < 0.0 && root.cents <= ((i - 20) * 2.5)) ? root.tune_color.with-alpha(0.5) : transparent;
-                drop-shadow-blur: 8px;
-                animate background { duration: 80ms; }
-                animate drop-shadow-color { duration: 80ms; }
-            }
-
-            // Center Perfect Marker
-            Rectangle {
-                x: parent.width / 2 - 8px;
-                y: 40px;
-                width: 16px;
-                height: 60px;
-                border-radius: 8px;
-                background: (root.is_active && abs(root.cents) <= 5.0) ? root.tune_color : #333340;
-                drop-shadow-color: (root.is_active && abs(root.cents) <= 5.0) ? root.tune_color.with-alpha(0.8) : transparent;
-                drop-shadow-blur: 15px;
-                animate background { duration: 150ms; }
-            }
-
-            // 20 segments on the sharp (right) side
-            for i in 20: Rectangle {
-                // i goes from 0 to 19. i=0 is closest to center, i=19 is furthest right.
-                x: parent.width / 2 + 20px + i * ((parent.width / 2 - 50px) / 20);
-                y: 50px;
-                width: ((parent.width / 2 - 50px) / 20) - 4px;
-                height: 40px;
-                border-radius: 6px;
+                property <float> inner_r: 150.0;
+                property <float> outer_r: (i == 20) ? 190.0 : 180.0;
+                property <float> cx: parent.width / 1px / 2.0;
+                property <float> cy: 210.0;
                 
-                // Active if cents > 0 and cents >= (i+1) * 2.5
-                background: (root.is_active && root.cents > 0.0 && root.cents >= ((i + 1) * 2.5)) ? root.tune_color : #1a1a24;
-                drop-shadow-color: (root.is_active && root.cents > 0.0 && root.cents >= ((i + 1) * 2.5)) ? root.tune_color.with-alpha(0.5) : transparent;
-                drop-shadow-blur: 8px;
-                animate background { duration: 80ms; }
-                animate drop-shadow-color { duration: 80ms; }
+                // Active logic:
+                property <bool> is_lit: root.is_active && (
+                    (root.cents <= -2.5 && tick_cents >= root.cents && tick_cents <= -2.5) ||
+                    (root.cents >= 2.5 && tick_cents <= root.cents && tick_cents >= 2.5) ||
+                    (abs(root.cents) < 2.5 && i == 20)
+                );
+
+                stroke: is_lit ? root.tune_color : #1a1a24;
+                stroke-width: (i == 20) ? 10px : 6px;
+                
+                MoveTo {
+                    x: cx + inner_r * sin(a);
+                    y: cy - inner_r * cos(a);
+                }
+                LineTo {
+                    x: cx + outer_r * sin(a);
+                    y: cy - outer_r * cos(a);
+                }
+
+                animate stroke { duration: 80ms; }
             }
         }
         
