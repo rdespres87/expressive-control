@@ -25,4 +25,7 @@
 - [x] Integrate PC Simulator multi-instrument dispatch and HIL theremin scenario
 - [x] Implement VL53L4CD I2C driver with dual-sensor address initialization
 - [x] Implement Native USB-MIDI transport via TinyUSB
-- [ ] Integrate Slint UI interface for the 5" touch display
+- [x] Design Dual-Board Architecture and Mockups (Master + Slave with extension arms and wood unibody)
+- [x] Define UART protocol structure (COBS + Postcard) between Master and Slave
+- [ ] Implement UART telemetry transmission in Master (and remove `#![allow(dead_code)]` from `protocol.rs`)
+- [ ] Integrate Slint UI interface for the 5" touch display on Slave board
