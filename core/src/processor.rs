@@ -120,19 +120,20 @@ impl ControlProcessor for MpeInstrument {
                     return Err(ProcessorError::BufferTooSmall);
                 }
 
-                if let Some(index) = self
+                // Find the voice owned by this touch and free its slot in one step.
+                let released = self
                     .voices
-                    .iter()
-                    .position(|v| v.is_some_and(|active| active.touch_id == id))
-                {
-                    let channel = Channel::new(index as u8 + 1);
-                    let base_note = self.voices[index].unwrap().base_note;
+                    .iter_mut()
+                    .enumerate()
+                    .find_map(|(index, slot)| {
+                        slot.take_if(|active| active.touch_id == id)
+                            .map(|voice| (index, voice))
+                    });
 
-                    self.voices[index] = None;
-
+                if let Some((index, voice)) = released {
                     out_buffer[0] = InstrumentEvent::NoteOff {
-                        channel,
-                        note: base_note,
+                        channel: Channel::new(index as u8 + 1),
+                        note: voice.base_note,
                         velocity: U7::new(0),
                     };
                     Ok(1)
@@ -141,5 +142,177 @@ impl ControlProcessor for MpeInstrument {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const PLACEHOLDER: InstrumentEvent = InstrumentEvent::NoteOff {
+        channel: Channel::new(0),
+        note: U7::new(0),
+        velocity: U7::new(0),
+    };
+
+    fn touch(id: u16, x: u8, force: u8) -> SensorEvent {
+        SensorEvent::Touch { id, x, y: 0, force }
+    }
+
+    #[test]
+    fn default_uses_standard_mpe_bend_range() {
+        let mpe = MpeInstrument::default();
+        assert_eq!(mpe.pitch_bend_range, 48);
+        assert!(mpe.voices.iter().all(Option::is_none));
+    }
+
+    #[test]
+    fn touch_allocates_first_member_channel() {
+        let mut mpe = MpeInstrument::default();
+        let mut out = [PLACEHOLDER; 4];
+
+        assert_eq!(mpe.process_event(touch(42, 64, 200), &mut out), Ok(2));
+        assert_eq!(
+            out[0],
+            InstrumentEvent::NoteOn {
+                channel: Channel::new(1),
+                note: U7::new(64),
+                velocity: U7::new(100),
+            }
+        );
+        assert_eq!(
+            out[1],
+            InstrumentEvent::ChannelPressure {
+                channel: Channel::new(1),
+                pressure: U7::new(100),
+            }
+        );
+        assert_eq!(
+            mpe.voices[0],
+            Some(ActiveVoice {
+                touch_id: 42,
+                base_note: U7::new(64),
+            })
+        );
+
+        assert_eq!(mpe.process_event(touch(43, 65, 10), &mut out), Ok(2));
+        assert!(
+            matches!(out[0], InstrumentEvent::NoteOn { channel, .. } if channel == Channel::new(2))
+        );
+    }
+
+    #[test]
+    fn sixteenth_touch_cannot_be_allocated() {
+        let mut mpe = MpeInstrument::default();
+        let mut out = [PLACEHOLDER; 2];
+        for id in 0..15 {
+            assert_eq!(mpe.process_event(touch(id, 60, 0), &mut out), Ok(2));
+        }
+        assert_eq!(
+            mpe.process_event(touch(15, 60, 0), &mut out),
+            Err(ProcessorError::VoiceStealingFailed)
+        );
+    }
+
+    #[test]
+    fn small_buffers_are_rejected() {
+        let mut mpe = MpeInstrument::default();
+        let mut one = [PLACEHOLDER; 1];
+        let mut none: [InstrumentEvent; 0] = [];
+
+        assert_eq!(
+            mpe.process_event(touch(1, 60, 0), &mut one),
+            Err(ProcessorError::BufferTooSmall)
+        );
+        assert_eq!(
+            mpe.process_event(SensorEvent::Position { id: 1, x: 0, y: 0 }, &mut one),
+            Err(ProcessorError::BufferTooSmall)
+        );
+        assert_eq!(
+            mpe.process_event(SensorEvent::Released { id: 1 }, &mut none),
+            Err(ProcessorError::BufferTooSmall)
+        );
+        // Nothing was allocated by the rejected touch.
+        assert!(mpe.voices.iter().all(Option::is_none));
+    }
+
+    #[test]
+    fn position_scales_x_to_14_bit_bend_and_y_to_timbre() {
+        let mut mpe = MpeInstrument::default();
+        let mut out = [PLACEHOLDER; 2];
+        assert_eq!(mpe.process_event(touch(7, 60, 0), &mut out), Ok(2));
+
+        for (x, expected) in [(0u8, 0u16), (128, 8224), (255, 16383)] {
+            let event = SensorEvent::Position { id: 7, x, y: 200 };
+            assert_eq!(mpe.process_event(event, &mut out), Ok(2));
+            assert_eq!(
+                out[0],
+                InstrumentEvent::PitchBend {
+                    channel: Channel::new(1),
+                    bend: U14::new(expected),
+                }
+            );
+            assert_eq!(
+                out[1],
+                InstrumentEvent::Timbre {
+                    channel: Channel::new(1),
+                    value: U7::new(100),
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_touches_and_3d_positions_are_ignored() {
+        let mut mpe = MpeInstrument::default();
+        let mut out = [PLACEHOLDER; 2];
+        let ignored = [
+            SensorEvent::Position { id: 9, x: 1, y: 1 },
+            SensorEvent::Released { id: 9 },
+            SensorEvent::Position3D {
+                id: 0,
+                x: 0,
+                y: 0,
+                z: 100,
+            },
+        ];
+        for event in ignored {
+            assert_eq!(mpe.process_event(event, &mut out), Ok(0));
+        }
+    }
+
+    #[test]
+    fn release_frees_the_voice_for_reuse() {
+        let mut mpe = MpeInstrument::default();
+        let mut out = [PLACEHOLDER; 2];
+        assert_eq!(mpe.process_event(touch(1, 60, 0), &mut out), Ok(2));
+        assert_eq!(mpe.process_event(touch(2, 72, 0), &mut out), Ok(2));
+
+        assert_eq!(
+            mpe.process_event(SensorEvent::Released { id: 1 }, &mut out),
+            Ok(1)
+        );
+        assert_eq!(
+            out[0],
+            InstrumentEvent::NoteOff {
+                channel: Channel::new(1),
+                note: U7::new(60),
+                velocity: U7::new(0),
+            }
+        );
+        assert_eq!(mpe.voices[0], None);
+        assert!(mpe.voices[1].is_some());
+
+        // Releasing twice is a no-op.
+        assert_eq!(
+            mpe.process_event(SensorEvent::Released { id: 1 }, &mut out),
+            Ok(0)
+        );
+
+        // The freed channel is handed to the next touch.
+        assert_eq!(mpe.process_event(touch(3, 50, 0), &mut out), Ok(2));
+        assert!(
+            matches!(out[0], InstrumentEvent::NoteOn { channel, .. } if channel == Channel::new(1))
+        );
     }
 }

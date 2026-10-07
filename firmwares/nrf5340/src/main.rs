@@ -137,8 +137,20 @@ async fn main(spawner: Spawner) {
     let midi_class = MidiClass::new(&mut builder, 1, 1, 64);
     let usb = builder.build();
 
-    spawner.spawn(usb_task(usb).unwrap());
-    spawner.spawn(midi_task(midi_class).unwrap());
+    match usb_task(usb) {
+        Ok(token) => spawner.spawn(token),
+        Err(e) => {
+            defmt::error!("Failed to spawn USB task: {}", defmt::Debug2Format(&e));
+            return;
+        }
+    }
+    match midi_task(midi_class) {
+        Ok(token) => spawner.spawn(token),
+        Err(e) => {
+            defmt::error!("Failed to spawn MIDI task: {}", defmt::Debug2Format(&e));
+            return;
+        }
+    }
 
     let mut instrument = MpeInstrument::default();
     let mut transport = UsbMidiTransport;

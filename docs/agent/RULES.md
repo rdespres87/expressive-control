@@ -16,3 +16,7 @@
 ## 3. Architecture Rules
 - **Core `no_std`:** The `expressive-core` crate MUST remain strictly `#![no_std]`. No hardware-specific dependencies are allowed in this crate.
 - **Hardware Isolation:** All hardware drivers and specific behaviors must be implemented in the respective firmware crates, not in the core.
+
+## 4. Coding Standards
+- **No Panics in Production:** The use of `unwrap()`, `expect()`, or `panic!()` is strictly FORBIDDEN in production code. All errors must be handled properly using `Result`, custom error enums, and graceful degradation/logging.
+- **High Test Coverage:** For every new implementation or feature, you MUST add the corresponding unit tests AND update the integration tests accordingly. Maintaining a very high test coverage across both unit and integration tests is mandatory to ensure reliability.

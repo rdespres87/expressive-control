@@ -1,5 +1,3 @@
-use expressive_core;
-
 #[test]
 fn test_core_initialization() {
     // This is a basic integration test.
