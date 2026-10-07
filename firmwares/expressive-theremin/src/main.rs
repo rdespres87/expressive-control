@@ -210,7 +210,7 @@ struct TinyUsbConfig {
 
 extern "C" {
     fn tinyusb_driver_install(config: *const TinyUsbConfig) -> i32;
-    fn tud_midi_stream_write(cable_num: u8, buffer: *const u8, bufsize: u32) -> u32;
+    fn tud_midi_n_stream_write(itf: u8, cable_num: u8, buffer: *const u8, bufsize: u32) -> u32;
 }
 
 fn install_usb_midi() -> Result<(), FirmwareError> {
@@ -235,7 +235,7 @@ fn send_usb_midi(bytes: &[u8]) {
         return;
     };
     // SAFETY: `bytes` is a valid slice of `len` bytes for the duration of the call.
-    let written = unsafe { tud_midi_stream_write(USB_MIDI_CABLE, bytes.as_ptr(), len) };
+    let written = unsafe { tud_midi_n_stream_write(0, USB_MIDI_CABLE, bytes.as_ptr(), len) };
     if written != len {
         log::warn!("USB-MIDI TX incomplete: {written}/{len} bytes ({bytes:02X?})");
     } else {
