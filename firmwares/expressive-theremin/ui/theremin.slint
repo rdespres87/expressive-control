@@ -12,9 +12,9 @@ export component SlaveWindow inherits Window {
     
     // UI Theme
     property <color> accent_color: #00f0ff; // Neon cyan
-    property <color> perfect_color: #00ff00; // Green for perfect pitch
+    property <color> perfect_color: #00ff88; // Green for perfect pitch
     property <color> warning_color: #ffaa00; // Orange for slightly off
-    property <color> danger_color: #ff2a5f; // Red for very off
+    property <color> danger_color: #ff3344; // Red for very off
 
     // Dynamic color logic: Green if within 5 cents, Orange if <= 15, Red beyond
     property <color> tune_color: !root.is_active ? #333340 : (abs(root.cents) <= 5.0 ? perfect_color : (abs(root.cents) <= 15.0 ? warning_color : danger_color));
@@ -23,56 +23,46 @@ export component SlaveWindow inherits Window {
         alignment: center;
         spacing: 10px;
         
-        // TOP: Half-Moon Tuner Gauge
+        // TOP: Strobe / LED segment gauge
         gauge := Rectangle {
-            height: 220px;
+            height: 270px; // Occupe plus de la moitié de l'écran (480px)
             width: 100%;
             
-            property <float> r: 160.0;
             property <float> cx: self.width / 1px / 2.0;
-            property <float> cy: 210.0;
-            property <angle> current_angle: root.cents * 1.8deg;
+            property <float> cy: 260.0; // Centre de rotation abaissé
             
-            // Background track (full half moon)
-            Path {
-                stroke: #1a1a24;
-                stroke-width: 24px;
-                // Start from left (-90deg)
-                MoveTo { x: gauge.cx - gauge.r; y: gauge.cy; }
-                // Arc to right (+90deg)
-                ArcTo {
-                    radius-x: gauge.r;
-                    radius-y: gauge.r;
-                    x: gauge.cx + gauge.r;
-                    y: gauge.cy;
-                    sweep: true; // clockwise
-                }
-            }
-            
-            // Filled dynamic arc (starts at center, arcs left or right)
-            Path {
-                stroke: root.is_active ? root.tune_color : transparent;
-                stroke-width: 24px;
+            // 101 radial LED segments (1 tick = 1 cent de résolution !)
+            for i in 101: Rectangle {
+                property <angle> a: -90deg + i * 1.8deg; // From -90 (left) to +90 (right), 180deg / 100 = 1.8deg
+                property <float> tick_cents: -50.0 + i * 1.0; // From -50 to +50, 100 cents / 100 = 1.0 cent
                 
-                // Start from center (top)
-                MoveTo { x: gauge.cx; y: gauge.cy - gauge.r; }
+                // Radius of the outer edge of the LED (Agrandissement massif)
+                property <float> outer_r: 240.0;
                 
-                // End at current_angle
-                ArcTo {
-                    radius-x: gauge.r;
-                    radius-y: gauge.r;
-                    x: gauge.cx + gauge.r * sin(gauge.current_angle);
-                    y: gauge.cy - gauge.r * cos(gauge.current_angle);
-                    sweep: root.cents > 0.0;
+                // Container height is exactly twice the radius so it rotates perfectly around cy
+                width: (i == 50) ? 6px : 3px; // Ticks plus fins car il y en a 101
+                height: outer_r * 2.0 * 1px;
+                x: gauge.cx * 1px - self.width / 2;
+                y: gauge.cy * 1px - self.height / 2;
+                
+                transform-rotation: a;
+                
+                // Lit if it's between center and current cents
+                property <bool> is_lit: root.is_active && (
+                    (root.cents <= -0.5 && tick_cents >= root.cents && tick_cents <= 0.0) ||
+                    (root.cents >= 0.5 && tick_cents <= root.cents && tick_cents >= 0.0) ||
+                    (abs(root.cents) < 0.5 && i == 50)
+                );
+
+                // The actual visible LED
+                Rectangle {
+                    width: 100%;
+                    height: (i == 50) ? 55px : 30px; // Ticks plus longs
+                    y: 0px; // Placed at the very top of the container
+                    background: parent.is_lit ? root.tune_color : #1a1a24;
+                    border-radius: self.width / 2;
+                    animate background { duration: 80ms; }
                 }
-            }
-            
-            // Add a discrete center tick marker
-            Path {
-                stroke: root.is_active && abs(root.cents) < 2.5 ? root.perfect_color : #ffffff;
-                stroke-width: 4px;
-                MoveTo { x: gauge.cx; y: gauge.cy - gauge.r - 20.0; }
-                LineTo { x: gauge.cx; y: gauge.cy - gauge.r + 20.0; }
             }
         }
         
@@ -98,7 +88,6 @@ export component SlaveWindow inherits Window {
                 vertical-alignment: bottom;
             }
         }
-        
-        // BOTTOM: Exact Cents Text removed
     }
 }
+
