@@ -27,6 +27,12 @@ embedded-hal = "1.0"
 embedded-hal-async = "1.0"
 embassy-futures = "0.1.1"
 
+# UART Protocol Dependencies
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+postcard = { version = "1.0", default-features = false }
+cobs = { version = "0.2.3", default-features = false }
+heapless = "0.8.0"
+
 [build-dependencies]
 embuild = "0.33.5"
 

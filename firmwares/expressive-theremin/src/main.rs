@@ -14,6 +14,8 @@ use expressive_core::processor::ControlProcessor;
 use expressive_core::{InstrumentEvent, SensorEvent};
 use theremin::TofThereminProcessor;
 
+pub mod protocol;
+
 /// Defines the hardware architecture the firmware is built for.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ThereminMode {
