@@ -31,37 +31,40 @@ export component SlaveWindow inherits Window {
             property <float> r: 160.0;
             property <float> cx: self.width / 1px / 2.0;
             property <float> cy: 210.0;
+            property <angle> current_angle: root.cents * 1.8deg;
             
-            // 41 segments in the half moon (-90 to +90 degrees)
-            for i in 41: Path {
-                property <angle> a1: -90deg + i * 4.5deg;
-                // Leave a gap between segments (e.g., span 3.5 deg, gap 1.0 deg)
-                property <angle> a2: -90deg + i * 4.5deg + 3.5deg;
-                property <float> tick_cents: -50.0 + i * 2.5;
-                
-                // Active logic:
-                property <bool> is_lit: root.is_active && (
-                    (root.cents <= -2.5 && tick_cents >= root.cents && tick_cents <= -2.5) ||
-                    (root.cents >= 2.5 && tick_cents <= root.cents && tick_cents >= 2.5) ||
-                    (abs(root.cents) < 2.5 && i == 20)
-                );
-
-                stroke: is_lit ? root.tune_color : #1a1a24;
-                stroke-width: (i == 20) ? 30px : 20px;
-                
-                MoveTo {
-                    x: gauge.cx + gauge.r * sin(a1);
-                    y: gauge.cy - gauge.r * cos(a1);
-                }
+            // Background track (full half moon)
+            Path {
+                stroke: #1a1a24;
+                stroke-width: 24px;
+                // Start from left (-90deg)
+                MoveTo { x: gauge.cx - gauge.r; y: gauge.cy; }
+                // Arc to right (+90deg)
                 ArcTo {
                     radius-x: gauge.r;
                     radius-y: gauge.r;
-                    x: gauge.cx + gauge.r * sin(a2);
-                    y: gauge.cy - gauge.r * cos(a2);
+                    x: gauge.cx + gauge.r;
+                    y: gauge.cy;
                     sweep: true; // clockwise
                 }
+            }
+            
+            // Filled dynamic arc (starts at center, arcs left or right)
+            Path {
+                stroke: root.is_active ? root.tune_color : transparent;
+                stroke-width: 24px;
                 
-                animate stroke { duration: 80ms; }
+                // Start from center (top)
+                MoveTo { x: gauge.cx; y: gauge.cy - gauge.r; }
+                
+                // End at current_angle
+                ArcTo {
+                    radius-x: gauge.r;
+                    radius-y: gauge.r;
+                    x: gauge.cx + gauge.r * sin(gauge.current_angle);
+                    y: gauge.cy - gauge.r * cos(gauge.current_angle);
+                    sweep: root.cents > 0.0;
+                }
             }
             
             // Add a discrete center tick marker
