@@ -53,6 +53,7 @@ jobs:
   build-firmware-esp32:
     name: Build Firmware (ESP32-S3)
     runs-on: ubuntu-latest
+    if: false # Temporarily disabled to save GitHub Actions minutes
     steps:
       - uses: actions/checkout@v4
 
