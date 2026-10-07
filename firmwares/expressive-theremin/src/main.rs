@@ -14,6 +14,23 @@ use expressive_core::processor::ControlProcessor;
 use expressive_core::{InstrumentEvent, SensorEvent};
 use theremin::TofThereminProcessor;
 
+/// Defines the hardware architecture the firmware is built for.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ThereminMode {
+    /// Legacy mode: One board reads both sensors and handles everything.
+    SingleBoard,
+    /// Dual-board: This board is the "Volume/Master". It reads the Volume ToF,
+    /// receives Pitch distance via UART, and outputs USB MIDI.
+    MasterBoard,
+    /// Dual-board: This board is the "Pitch/Slave". It reads the Pitch ToF
+    /// and streams the distance to the Master via UART.
+    SlaveBoard,
+}
+
+/// Change this constant to build for the desired board.
+/// (In the future, we could read a GPIO pin at boot to set this dynamically).
+const BOARD_MODE: ThereminMode = ThereminMode::SingleBoard;
+
 /// Default 7-bit I2C address of a VL53L4CD after power-up.
 const VL53L4CD_DEFAULT_ADDR: u8 = 0x29;
 /// 7-bit I2C address assigned to the volume sensor during the sequential boot.
@@ -274,6 +291,8 @@ async fn read_pending_distance(sensor: &mut Sensor<'_>) -> Result<u16, FirmwareE
 // --- Application ---
 
 async fn run() -> Result<(), FirmwareError> {
+    log::info!("Starting in mode: {:?}", BOARD_MODE);
+    
     let peripherals = Peripherals::take().context("peripherals take")?;
     let pins = peripherals.pins;
 

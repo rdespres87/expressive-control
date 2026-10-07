@@ -67,32 +67,32 @@ If soldering a custom PCB "Shield" for the Elecrow:
 
 ---
 
-## 7. 🏗 Étude d'Architecture : "Dual-Board" (2x Écrans Elecrow)
+## 7. 🏗 Architecture Study: "Dual-Board" (2x Elecrow Displays)
 
-Utiliser **deux** cartes Elecrow 5.0" (une pour chaque main) est une excellente idée qui transforme radicalement l'ergonomie et le design de l'instrument.
+Using **two** Elecrow 5.0" boards (one for each hand) is an excellent architectural evolution that radically transforms the ergonomics and design of the instrument.
 
-### 7.1 Avantages Ergonomiques & Esthétiques
-*   **Symétrie parfaite :** Chaque main (Pitch à droite, Volume à gauche) possède son propre tableau de bord dédié de 5 pouces.
-*   **Affichage spécialisé :**
-    *   **L'écran Pitch (Main Droite) :** Peut afficher un "Tuner Stroboscopique" géant, le nom de la note exacte, et l'octave avec des animations très fluides.
-    *   **L'écran Volume (Main Gauche) :** Peut afficher un oscilloscope en temps réel, les réglages de la dynamique (dB), et les menus du système.
-*   **Modularité physique :** Les deux "tours" du Theremin peuvent être espacées librement selon la morphologie du musicien, sans être contraintes par un petit boîtier central.
+### 7.1 Ergonomic & Aesthetic Benefits
+*   **Perfect Symmetry:** Each hand (Pitch on the right, Volume on the left) has its own dedicated 5-inch dashboard.
+*   **Specialized Displays:**
+    *   **Pitch Screen (Right Hand):** Can display a large "Strobe Tuner", the exact note name, and octave information with fluid animations.
+    *   **Volume Screen (Left Hand):** Can display a real-time oscilloscope, dynamic range settings (dB), and system menus.
+*   **Physical Modularity:** The two "towers" of the Theremin can be spaced freely according to the musician's morphology, without being constrained by a small central chassis.
 
-### 7.2 Communication entre les deux cartes
-Puisque chaque carte lit son propre capteur ToF, elles doivent synchroniser leurs données pour générer un flux MIDI cohérent. Trois options :
+### 7.2 Communication Between the Boards
+Since each board reads its own ToF sensor, they must synchronize their data to generate a coherent MIDI stream. Three options are available:
 
-1.  **Sans Fil (ESP-NOW) - *Recommandé* :**
-    *   Le protocole ESP-NOW d'Espressif permet aux deux cartes de communiquer en Wi-Fi direct avec une latence ultra-basse (**< 2 ms**).
-    *   **Avantage :** 100% sans fil entre les deux moitiés de l'instrument ! Seul l'écran "Maître" se branche en USB à l'ordinateur.
-2.  **Filaire (Série / UART) :**
-    *   On relie 3 fils (TX, RX, GND) entre les deux cartes.
-    *   **Avantage :** Latence nulle, extrêmement robuste, très facile à coder, utilise les broches RX/TX existantes.
-3.  **Filaire (CAN Bus / TWAI) :**
-    *   Le standard de l'industrie automobile et des gros synthés (ex: Osmose). L'ESP32 possède un contrôleur CAN intégré.
-    *   **Inconvénient :** Nécessite d'acheter un composant supplémentaire (Transceiver CAN).
+1.  **Wireless (ESP-NOW) - *Recommended*:**
+    *   Espressif's ESP-NOW protocol allows the two boards to communicate via direct Wi-Fi with ultra-low latency (**< 2 ms**).
+    *   **Advantage:** 100% wireless link between the two halves of the instrument! Only the "Master" screen needs a USB connection to the computer.
+2.  **Wired (Serial / UART):**
+    *   Requires 3 wires (TX, RX, GND) between the two boards.
+    *   **Advantage:** Zero latency, highly robust, very easy to implement, uses existing RX/TX pins.
+3.  **Wired (CAN Bus / TWAI):**
+    *   The automotive and pro-synth industry standard (e.g., Osmose). The ESP32 has a built-in CAN controller.
+    *   **Disadvantage:** Requires purchasing an additional component (CAN Transceiver).
 
-### 7.3 Impact sur le Code
-Avec cette architecture, le code actuel serait légèrement remanié :
-*   Le firmware reste le même exécutable, mais il intègre un mode **"Pitch (Esclave)"** ou **"Volume (Maître)"** configurable au démarrage.
-*   La **Carte Pitch** lit son capteur et envoie juste la distance `Z` à la carte Volume via ESP-NOW. Elle affiche l'UI du Tuner.
-*   La **Carte Volume** lit son capteur, réceptionne la distance Pitch, passe le tout dans le `TofThereminProcessor`, génère le MIDI via USB, et affiche l'UI principale.
+### 7.3 Impact on Firmware
+With this architecture, the current codebase will be slightly refactored:
+*   The firmware remains a single executable, but incorporates a **"Pitch (Slave)"** or **"Volume (Master)"** mode, configurable at boot.
+*   The **Pitch Board** reads its sensor and sends only the `Z` distance to the Volume board via ESP-NOW. It renders the Tuner UI.
+*   The **Volume Board** reads its sensor, receives the Pitch distance, feeds both into the `TofThereminProcessor`, generates USB MIDI, and renders the Main UI.
