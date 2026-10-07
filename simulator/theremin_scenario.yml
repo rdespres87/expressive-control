@@ -7,11 +7,19 @@ actions:
   - wait_ms: 200
 
   # -------------------------
-  # Tuning to "Some" (C4) while muted
+  # Tuning to "Some" (C4) while muted - starting very high and gliding down
   # -------------------------
-  - event: !Position3D { id: 0, x: 0, y: 0, z: 960 } # A bit sharp
-  - wait_ms: 500
-  - event: !Position3D { id: 0, x: 0, y: 0, z: 1030 } # Overshoot, a bit flat
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 700 } # Starts way too sharp!
+  - wait_ms: 400
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 780 } # Gliding down...
+  - wait_ms: 300
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 850 }
+  - wait_ms: 300
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 920 }
+  - wait_ms: 300
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 960 } # Getting close...
+  - wait_ms: 400
+  - event: !Position3D { id: 0, x: 0, y: 0, z: 1020 } # Overshoot slightly flat
   - wait_ms: 500
   - event: !Position3D { id: 0, x: 0, y: 0, z: 1000 } # Found perfect C4!
   - wait_ms: 800
