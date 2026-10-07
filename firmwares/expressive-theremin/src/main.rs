@@ -13,6 +13,8 @@ use expressive_core::midi::ToMidi;
 use expressive_core::processor::ControlProcessor;
 use expressive_core::{InstrumentEvent, SensorEvent};
 use theremin::TofThereminProcessor;
+use esp_idf_hal::uart::{AsyncUartDriver, UartConfig};
+use crate::protocol::{MasterMessage, MAX_MESSAGE_SIZE};
 
 pub mod protocol;
 
@@ -290,6 +292,31 @@ async fn read_pending_distance(sensor: &mut Sensor<'_>) -> Result<u16, FirmwareE
     Ok(measurement.distance)
 }
 
+async fn send_telemetry<T: esp_idf_hal::uart::Uart>(
+    uart: &mut AsyncUartDriver<'_, T>,
+    processor: &TofThereminProcessor,
+) {
+    let bend_u14 = processor.current_pitch_bend();
+    let bend_cents = (((bend_u14 as f32) - 8192.0) / 8192.0 * 50.0) as i8;
+
+    let msg = MasterMessage::Telemetry {
+        midi_note: processor.base_note.as_u8(),
+        pitch_bend_cents: bend_cents,
+        volume: processor.current_volume(),
+        is_muted: !processor.is_playing(),
+    };
+
+    let mut buf = [0u8; MAX_MESSAGE_SIZE];
+    if let Ok(s_slice) = postcard::to_slice(&msg, &mut buf[..MAX_MESSAGE_SIZE - 2]) {
+        let mut cobs_buf = [0u8; MAX_MESSAGE_SIZE];
+        let cobs_len = cobs::encode(s_slice, &mut cobs_buf);
+        cobs_buf[cobs_len] = 0x00; // terminator
+        if let Err(e) = uart.write(&cobs_buf[..=cobs_len]).await {
+            log::warn!("UART TX error: {:?}", e);
+        }
+    }
+}
+
 // --- Application ---
 
 async fn run() -> Result<(), FirmwareError> {
@@ -305,6 +332,17 @@ async fn run() -> Result<(), FirmwareError> {
 
     log::info!("Initializing TinyUSB for Native USB-MIDI Class...");
     install_usb_midi()?;
+
+    log::info!("Initializing UART telemetry link (Master -> Slave)...");
+    let uart_config = UartConfig::new().baudrate(115200.into());
+    let mut uart = AsyncUartDriver::new(
+        peripherals.uart1,
+        pins.gpio17, // TX to Slave
+        pins.gpio18, // RX from Slave
+        Option::<esp_idf_hal::gpio::AnyIOPin>::None,
+        Option::<esp_idf_hal::gpio::AnyIOPin>::None,
+        &uart_config,
+    ).context("UART init")?;
 
     let mut xshut_pitch = PinDriver::output(pins.gpio6).context("XSHUT pitch pin")?;
     let mut xshut_volume = PinDriver::output(pins.gpio7).context("XSHUT volume pin")?;
@@ -359,6 +397,7 @@ async fn run() -> Result<(), FirmwareError> {
                                 log::info!("Generated Event (Pitch): {ev:?}");
                                 send_usb_midi(ev.to_midi().as_slice());
                             }
+                            send_telemetry(&mut uart, &processor).await;
                         }
                     }
                     Err(e) => log::warn!("{e}"),
@@ -377,6 +416,7 @@ async fn run() -> Result<(), FirmwareError> {
                                 log::info!("Generated Event (Volume): {ev:?}");
                                 send_usb_midi(ev.to_midi().as_slice());
                             }
+                            send_telemetry(&mut uart, &processor).await;
                         }
                     }
                     Err(e) => log::warn!("{e}"),

@@ -15,6 +15,20 @@ pub struct TofThereminProcessor {
     current_pitch_bend: U14,
 }
 
+impl TofThereminProcessor {
+    pub fn current_volume(&self) -> u8 {
+        self.current_volume.as_u8()
+    }
+
+    pub fn current_pitch_bend(&self) -> u16 {
+        self.current_pitch_bend.as_u16()
+    }
+
+    pub fn is_playing(&self) -> bool {
+        self.is_playing
+    }
+}
+
 impl Default for TofThereminProcessor {
     fn default() -> Self {
         Self {
