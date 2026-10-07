@@ -23,6 +23,11 @@ jobs:
           # We add the embedded target to ensure the toolchain supports it later
           targets: thumbv8m.main-none-eabihf
 
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "host"
+
       - name: Install System Dependencies (ALSA, Udev, Fontconfig)
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libfontconfig1-dev
 
@@ -46,6 +51,11 @@ jobs:
         with:
           targets: thumbv8m.main-none-eabihf
 
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "embedded"
+
       - name: Check Core for nRF5340 (Cortex-M33)
         # This checks that expressive-core successfully compiles without the standard library
         run: cargo check -p expressive-core --target thumbv8m.main-none-eabihf
@@ -57,6 +67,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache ESP-IDF (embuild)
+        uses: actions/cache@v4
+        with:
+          path: firmwares/expressive-theremin/.embuild
+          key: ${{ runner.os }}-esp-idf-${{ hashFiles('firmwares/expressive-theremin/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-esp-idf-
+
       - name: Install ESP-IDF Dependencies
         run: sudo apt-get update && sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
 
@@ -66,6 +84,12 @@ jobs:
           default: true
           buildtargets: esp32s3
           ldproxy: true
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "esp32"
+          workspaces: "firmwares/expressive-theremin -> target"
 
       - name: Check ESP32-S3 Firmware
         run: cd firmwares/expressive-theremin && cargo clippy -- -D warnings
