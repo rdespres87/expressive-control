@@ -203,7 +203,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use expressive_core::processor::MpeInstrument;
+    use expressive_core::processor::MidiProcessor;
     use expressive_core::TransportError;
     use theremin::TofThereminProcessor;
 
@@ -308,11 +308,11 @@ mod tests {
         assert_eq!(
             transport.sent,
             vec![
-                vec![0x91, 60, 127], // NoteOn 60, vel 127
-                vec![0xE1, 0x00, 0x40],
-                vec![0x81, 60, 0],
-                vec![0x91, 84, 127],
-                vec![0xE1, 0x00, 0x40]
+                vec![0x90, 60, 127], // NoteOn 60, vel 127
+                vec![0xE0, 0x00, 0x40],
+                vec![0x80, 60, 0],
+                vec![0x90, 84, 127],
+                vec![0xE0, 0x00, 0x40]
             ]
         );
         assert_eq!(ui_events.len(), 5);
@@ -372,7 +372,7 @@ mod tests {
                 })
             })
             .collect();
-        let mut instrument = MpeInstrument::default();
+        let mut instrument = MidiProcessor::default();
         let mut transport = RecordingTransport::default();
 
         let report = run_scenario(

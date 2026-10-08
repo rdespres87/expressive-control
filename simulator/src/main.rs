@@ -9,9 +9,9 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use expressive_core::processor::{
-    ConfigMessage, ControlProcessor, FilterSpeed, MpeInstrument, RootNote, Scale,
+    ConfigMessage, ControlProcessor, FilterSpeed, MidiProcessor, ProcessorMode, RootNote, Scale,
 };
-use expressive_core::{MidiTransport, TransportError};
+use expressive_core::{Channel, MidiTransport, TransportError};
 #[cfg(unix)]
 use midir::os::unix::VirtualOutput;
 use midir::MidiOutputConnection;
@@ -140,7 +140,7 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
 
     if !is_theremin {
         println!("🎹 Using MPE Keyboard Logic");
-        let mut instrument = MpeInstrument::default();
+        let mut instrument = MidiProcessor::default();
         let report = start_and_run(&scenario, &mut instrument, &mut transport, |_| {}, None);
         println!("✅ PC Simulation complete: {report:?}");
         return Ok(());
@@ -208,8 +208,11 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
     let tx_pb = config_tx.clone();
     ui_master.on_pb_range_changed(move |r| {
         println!("Master UI [Touch]: PB Range changed to {}", r);
-        println!("UART TX (Master -> Slave): SetPitchBendRange({})", r);
-        let _ = tx_pb.send(ConfigMessage::SetPitchBendRange(r as u8));
+        println!("UART TX (Master -> Slave): SetProcessorMode(MPE, {})", r);
+        let _ = tx_pb.send(ConfigMessage::SetProcessorMode(ProcessorMode::Mpe {
+            manager_channel: Channel::new(0),
+            pitch_bend_range: r as u8,
+        }));
     });
 
     let tx_quant = config_tx.clone();

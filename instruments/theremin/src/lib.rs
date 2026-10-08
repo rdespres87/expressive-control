@@ -2,7 +2,10 @@
 
 use expressive_core::{
     Channel, InstrumentEvent, SensorEvent, U7, U14,
-    processor::{ConfigMessage, ControlProcessor, FilterSpeed, ProcessorError, RootNote, Scale},
+    processor::{
+        ConfigMessage, ControlProcessor, FilterSpeed, ProcessorError, ProcessorMode, RootNote,
+        Scale,
+    },
 };
 
 pub struct TofThereminProcessor {
@@ -22,6 +25,7 @@ pub struct TofThereminProcessor {
     pub octave_range: i32,
     pub pitch_quantization: i32,
     pub filter_speed: FilterSpeed,
+    pub processor_mode: ProcessorMode,
 }
 
 impl TofThereminProcessor {
@@ -43,8 +47,8 @@ impl Default for TofThereminProcessor {
         Self {
             min_distance_mm: 20,
             max_distance_mm: 1000,
-            base_note: U7::new(60),         // Middle C
-            pitch_bend_range_semitones: 48, // MPE +/- 48 semitones
+            base_note: U7::new(60),        // Middle C
+            pitch_bend_range_semitones: 2, // Standard MIDI +/- 2 semitones
             is_playing: false,
             note_on_sent: false,
             current_volume: U7::new(0),
@@ -55,6 +59,7 @@ impl Default for TofThereminProcessor {
             octave_range: 2,
             pitch_quantization: 50,
             filter_speed: FilterSpeed::Fast,
+            processor_mode: ProcessorMode::default(),
         }
     }
 }
@@ -97,9 +102,15 @@ impl TofThereminProcessor {
         let absolute_pitch = base_midi_note as f32 + exact_semitones;
         let semitones_from_prev = absolute_pitch - self.base_note.as_u8() as f32;
 
-        let midi_note = if semitones_from_prev.abs() > self.pitch_bend_range_semitones as f32 {
+        let pb_range_f32 = self.pitch_bend_range_semitones as f32;
+        let midi_note = if semitones_from_prev > pb_range_f32 || semitones_from_prev < -pb_range_f32
+        {
             // Note is outside the pitch bend range, we must trigger a new note
-            absolute_pitch.round() as i32
+            if absolute_pitch >= 0.0 {
+                (absolute_pitch + 0.5) as i32
+            } else {
+                (absolute_pitch - 0.5) as i32
+            }
         } else {
             // Stay on the same base note and just bend
             self.base_note.as_u8() as i32
@@ -141,7 +152,17 @@ impl ControlProcessor for TofThereminProcessor {
             ConfigMessage::SetOctaveRange(r) => self.octave_range = r,
             ConfigMessage::SetPitchQuantization(q) => self.pitch_quantization = q,
             ConfigMessage::SetFilterSpeed(s) => self.filter_speed = s,
-            ConfigMessage::SetPitchBendRange(r) => self.pitch_bend_range_semitones = r,
+            ConfigMessage::SetProcessorMode(m) => {
+                self.processor_mode = m;
+                match m {
+                    ProcessorMode::Standard {
+                        pitch_bend_range, ..
+                    } => self.pitch_bend_range_semitones = pitch_bend_range,
+                    ProcessorMode::Mpe {
+                        pitch_bend_range, ..
+                    } => self.pitch_bend_range_semitones = pitch_bend_range,
+                }
+            }
         }
     }
 
@@ -154,6 +175,13 @@ impl ControlProcessor for TofThereminProcessor {
         telemetry.handle(expressive_core::telemetry::TelemetryEvent::SensorReceived(
             &event,
         ));
+
+        let channel = match self.processor_mode {
+            ProcessorMode::Standard { channel, .. } => channel,
+            ProcessorMode::Mpe {
+                manager_channel, ..
+            } => Channel::new(manager_channel.as_u8() + 1), // Theremin uses first member channel
+        };
 
         match event {
             SensorEvent::Position3D { id, x: _, y: _, z } => {
@@ -173,7 +201,7 @@ impl ControlProcessor for TofThereminProcessor {
                                 return Err(ProcessorError::BufferTooSmall);
                             }
                             out_buffer[idx] = InstrumentEvent::NoteOn {
-                                channel: Channel::new(1),
+                                channel,
                                 note: self.base_note,
                                 velocity: self.current_volume,
                             };
@@ -185,14 +213,14 @@ impl ControlProcessor for TofThereminProcessor {
                                 return Err(ProcessorError::BufferTooSmall);
                             }
                             out_buffer[idx] = InstrumentEvent::NoteOff {
-                                channel: Channel::new(1),
+                                channel,
                                 note: prev_note,
                                 velocity: U7::new(0),
                             };
                             telemetry.handle(expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(&out_buffer[idx]));
                             idx += 1;
                             out_buffer[idx] = InstrumentEvent::NoteOn {
-                                channel: Channel::new(1),
+                                channel,
                                 note: self.base_note,
                                 velocity: self.current_volume,
                             };
@@ -204,7 +232,7 @@ impl ControlProcessor for TofThereminProcessor {
                             return Err(ProcessorError::BufferTooSmall);
                         }
                         out_buffer[idx] = InstrumentEvent::PitchBend {
-                            channel: Channel::new(1),
+                            channel,
                             bend: self.current_pitch_bend,
                         };
                         telemetry.handle(
@@ -227,14 +255,14 @@ impl ControlProcessor for TofThereminProcessor {
                                 return Err(ProcessorError::BufferTooSmall);
                             }
                             out_buffer[idx] = InstrumentEvent::NoteOn {
-                                channel: Channel::new(1),
+                                channel,
                                 note: self.base_note,
                                 velocity: self.current_volume,
                             };
                             telemetry.handle(expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(&out_buffer[idx]));
                             idx += 1;
                             out_buffer[idx] = InstrumentEvent::PitchBend {
-                                channel: Channel::new(1),
+                                channel,
                                 bend: self.current_pitch_bend,
                             };
                             telemetry.handle(expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(&out_buffer[idx]));
@@ -248,7 +276,7 @@ impl ControlProcessor for TofThereminProcessor {
                                 return Err(ProcessorError::BufferTooSmall);
                             }
                             out_buffer[idx] = InstrumentEvent::NoteOff {
-                                channel: Channel::new(1),
+                                channel,
                                 note: self.base_note,
                                 velocity: U7::new(0),
                             };
@@ -261,8 +289,12 @@ impl ControlProcessor for TofThereminProcessor {
                             if out_buffer.len() < idx + 1 {
                                 return Err(ProcessorError::BufferTooSmall);
                             }
+
+                            // In MPE, send ChannelPressure for Volume antenna.
+                            // In Standard mode, send CC7. For simplicity we keep it as ChannelPressure for now,
+                            // or we can branch based on mode. Let's keep ChannelPressure.
                             out_buffer[idx] = InstrumentEvent::ChannelPressure {
-                                channel: Channel::new(1),
+                                channel,
                                 pressure: self.current_volume,
                             };
                             telemetry.handle(expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(&out_buffer[idx]));
@@ -331,7 +363,8 @@ mod tests {
 
     #[test]
     fn test_map_distance_to_note_and_bend() {
-        let processor = TofThereminProcessor::default();
+        let mut processor = TofThereminProcessor::default();
+        processor.pitch_bend_range_semitones = 1;
 
         // 1000mm -> C4 (60), center bend
         let (n, b) = processor.map_distance_to_note_and_bend(1000);

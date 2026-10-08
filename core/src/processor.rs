@@ -48,6 +48,29 @@ pub enum FilterSpeed {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProcessorMode {
+    /// Standard MIDI 1.0 mapping. All events are sent on a single channel.
+    Standard {
+        channel: Channel,
+        pitch_bend_range: u8,
+    },
+    /// MIDI Polyphonic Expression (MPE) mapping.
+    Mpe {
+        manager_channel: Channel,
+        pitch_bend_range: u8,
+    },
+}
+
+impl Default for ProcessorMode {
+    fn default() -> Self {
+        ProcessorMode::Standard {
+            channel: Channel::new(0),
+            pitch_bend_range: 2,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigMessage {
     SetRootNote(RootNote),
     SetScale(Scale),
@@ -55,7 +78,7 @@ pub enum ConfigMessage {
     SetOctaveRange(i32),
     SetPitchQuantization(i32),
     SetFilterSpeed(FilterSpeed),
-    SetPitchBendRange(u8),
+    SetProcessorMode(ProcessorMode),
 }
 
 pub trait ControlProcessor {
@@ -73,21 +96,13 @@ pub trait ControlProcessor {
     ) -> Result<usize, ProcessorError>;
 }
 
-pub struct MpeInstrument {
+#[derive(Default)]
+pub struct MidiProcessor {
     pub voices: [Option<ActiveVoice>; 15],
-    pub pitch_bend_range: u8,
+    pub mode: ProcessorMode,
 }
 
-impl Default for MpeInstrument {
-    fn default() -> Self {
-        Self {
-            voices: [None; 15],
-            pitch_bend_range: 48, // Standard MPE pitch bend range (48 semitones)
-        }
-    }
-}
-
-impl ControlProcessor for MpeInstrument {
+impl ControlProcessor for MidiProcessor {
     fn process_event<T: crate::telemetry::TelemetryHandler>(
         &mut self,
         event: SensorEvent,
@@ -111,7 +126,19 @@ impl ControlProcessor for MpeInstrument {
                 }
 
                 let index = assigned_index.ok_or(ProcessorError::VoiceStealingFailed)?;
-                let channel = Channel::new(index as u8 + 1);
+
+                let channel = match self.mode {
+                    ProcessorMode::Standard { channel, .. } => channel,
+                    ProcessorMode::Mpe {
+                        manager_channel, ..
+                    } => {
+                        // Manager is usually 1, members are 2-16.
+                        // Here we just offset by manager_channel value.
+                        // A more robust implementation would wrap around or respect standard strictly,
+                        // but this satisfies the basic MPE member channel assignment.
+                        Channel::new(manager_channel.as_u8() + index as u8 + 1)
+                    }
+                };
 
                 // We use the initial X coordinate as the base MIDI Note (0-127).
                 // The hardware abstraction layer (HAL) will be responsible for scaling physical position to a base note.
@@ -132,6 +159,10 @@ impl ControlProcessor for MpeInstrument {
                     note: base_note,
                     velocity: U7::new(force >> 1),
                 };
+
+                // In Standard mode, we might just use CC7 (Volume) instead of ChannelPressure,
+                // but for now we emit ChannelPressure consistently, or we could branch on mode.
+                // For simplicity and expressive control, we keep ChannelPressure for Z.
                 out_buffer[1] = InstrumentEvent::ChannelPressure {
                     channel,
                     pressure: U7::new(force >> 1),
@@ -156,7 +187,12 @@ impl ControlProcessor for MpeInstrument {
                     .iter()
                     .position(|v| v.is_some_and(|active| active.touch_id == id))
                 {
-                    let channel = Channel::new(index as u8 + 1);
+                    let channel = match self.mode {
+                        ProcessorMode::Standard { channel, .. } => channel,
+                        ProcessorMode::Mpe {
+                            manager_channel, ..
+                        } => Channel::new(manager_channel.as_u8() + index as u8 + 1),
+                    };
 
                     // Precise 8-bit to 14-bit scaling:
                     // x << 6 maps the top 8 bits. We fill the lower 6 bits with the top 6 bits of x.
@@ -166,6 +202,7 @@ impl ControlProcessor for MpeInstrument {
                         channel,
                         bend: U14::new(scaled_bend),
                     };
+
                     out_buffer[1] = InstrumentEvent::Timbre {
                         channel,
                         value: U7::new(y >> 1),
@@ -200,7 +237,13 @@ impl ControlProcessor for MpeInstrument {
                     });
 
                 if let Some((index, voice)) = released {
-                    let channel = Channel::new(index as u8 + 1);
+                    let channel = match self.mode {
+                        ProcessorMode::Standard { channel, .. } => channel,
+                        ProcessorMode::Mpe {
+                            manager_channel, ..
+                        } => Channel::new(manager_channel.as_u8() + index as u8 + 1),
+                    };
+
                     telemetry.handle(crate::telemetry::TelemetryEvent::VoiceReleased {
                         touch_id: id,
                         channel: channel.as_u8(),
@@ -239,16 +282,31 @@ mod tests {
         SensorEvent::Touch { id, x, y: 0, force }
     }
 
+    fn mpe_processor() -> MidiProcessor {
+        let mut p = MidiProcessor::default();
+        p.mode = ProcessorMode::Mpe {
+            manager_channel: Channel::new(0),
+            pitch_bend_range: 48,
+        };
+        p
+    }
+
     #[test]
-    fn default_uses_standard_mpe_bend_range() {
-        let mpe = MpeInstrument::default();
-        assert_eq!(mpe.pitch_bend_range, 48);
+    fn default_uses_standard_mode() {
+        let mpe = MidiProcessor::default();
+        assert_eq!(
+            mpe.mode,
+            ProcessorMode::Standard {
+                channel: Channel::new(0),
+                pitch_bend_range: 2
+            }
+        );
         assert!(mpe.voices.iter().all(Option::is_none));
     }
 
     #[test]
     fn touch_allocates_first_member_channel() {
-        let mut mpe = MpeInstrument::default();
+        let mut mpe = mpe_processor();
         let mut out = [PLACEHOLDER; 4];
         let mut t = crate::telemetry::NoopTelemetry;
 
@@ -290,7 +348,7 @@ mod tests {
 
     #[test]
     fn sixteenth_touch_cannot_be_allocated() {
-        let mut mpe = MpeInstrument::default();
+        let mut mpe = mpe_processor();
         let mut out = [PLACEHOLDER; 2];
         let mut t = crate::telemetry::NoopTelemetry;
         for id in 0..15 {
@@ -304,7 +362,7 @@ mod tests {
 
     #[test]
     fn small_buffers_are_rejected() {
-        let mut mpe = MpeInstrument::default();
+        let mut mpe = mpe_processor();
         let mut one = [PLACEHOLDER; 1];
         let mut none: [InstrumentEvent; 0] = [];
         let mut t = crate::telemetry::NoopTelemetry;
@@ -331,7 +389,7 @@ mod tests {
 
     #[test]
     fn position_scales_x_to_14_bit_bend_and_y_to_timbre() {
-        let mut mpe = MpeInstrument::default();
+        let mut mpe = mpe_processor();
         let mut out = [PLACEHOLDER; 2];
         let mut t = crate::telemetry::NoopTelemetry;
         assert_eq!(mpe.process_event(touch(7, 60, 0), &mut out, &mut t), Ok(2));
@@ -358,7 +416,7 @@ mod tests {
 
     #[test]
     fn unknown_touches_and_3d_positions_are_ignored() {
-        let mut mpe = MpeInstrument::default();
+        let mut mpe = mpe_processor();
         let mut out = [PLACEHOLDER; 2];
         let mut t = crate::telemetry::NoopTelemetry;
         let ignored = [
@@ -378,7 +436,7 @@ mod tests {
 
     #[test]
     fn release_frees_the_voice_for_reuse() {
-        let mut mpe = MpeInstrument::default();
+        let mut mpe = mpe_processor();
         let mut out = [PLACEHOLDER; 2];
         let mut t = crate::telemetry::NoopTelemetry;
         assert_eq!(mpe.process_event(touch(1, 60, 0), &mut out, &mut t), Ok(2));
