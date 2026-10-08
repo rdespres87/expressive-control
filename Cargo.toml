@@ -2,7 +2,7 @@
 members = [
     "core",
     "instruments/theremin",
-    "simulator",
+    "simulator", "tools/telemetry-viewer",
 ]
 exclude = ["firmwares/nrf5340", "firmwares/expressive-theremin"]
 resolver = "2"
