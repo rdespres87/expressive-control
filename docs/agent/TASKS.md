@@ -30,6 +30,6 @@
 - [x] Implement UART telemetry transmission in Master (and remove `#![allow(dead_code)]` from `protocol.rs`)
 - [x] Integrate Slint UI interface for the 5" touch display on Slave board (tuner gauge rendering)
 - [ ] Add touch interactivity to Slint UI for dynamically configuring octave and scale (`SlaveMessage` via UART)
-- [ ] Implement a debug telemetry system for tracing MIDI messages, raw sensor values, and processor state
+- [x] Implement a debug telemetry system for tracing MIDI messages, raw sensor values, and processor state
 - [ ] Implement Composite USB device (MIDI + CDC) via TinyUSB to support Hardware-In-The-Loop (HIL) simulation
 - [ ] Implement `esp-serial-flasher` embedded in Master to safely flash Slave via UART (Dual-board OTA update)
