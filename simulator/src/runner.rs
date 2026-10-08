@@ -59,8 +59,10 @@ where
                     for event_out in out_buffer.iter().take(count) {
                         report.events_out += 1;
                         let midi_msg = event_out.to_midi();
-                        println!("  -> {event_out:?} | Hex: {:02X?}", midi_msg.as_slice());
-                        if let Err(e) = transport.send_bytes(midi_msg.as_slice()) {
+                        let slice = midi_msg.as_slice();
+                        let human = format_midi_human_readable(slice);
+                        println!("  -> {event_out:?} | Hex: {:02X?} | {}", slice, human);
+                        if let Err(e) = transport.send_bytes(slice) {
                             report.transport_errors += 1;
                             eprintln!("  -> Error sending MIDI: {e:?}");
                         }
@@ -81,6 +83,74 @@ where
         }
     }
     report
+}
+
+/// Helper function to provide a human-readable interpretation of a raw MIDI byte slice.
+fn format_midi_human_readable(bytes: &[u8]) -> String {
+    if bytes.is_empty() {
+        return "Empty".to_string();
+    }
+    let status = bytes[0] >> 4;
+    let channel = (bytes[0] & 0x0F) + 1;
+    match status {
+        0x8 => {
+            if bytes.len() >= 3 {
+                format!(
+                    "Note Off (Ch {}, Note {}, Vel {})",
+                    channel, bytes[1], bytes[2]
+                )
+            } else {
+                "Note Off (Malformed)".to_string()
+            }
+        }
+        0x9 => {
+            if bytes.len() >= 3 {
+                format!(
+                    "Note On (Ch {}, Note {}, Vel {})",
+                    channel, bytes[1], bytes[2]
+                )
+            } else {
+                "Note On (Malformed)".to_string()
+            }
+        }
+        0xB => {
+            if bytes.len() >= 3 {
+                let cc = bytes[1];
+                let val = bytes[2];
+                let purpose = match cc {
+                    1 => "Modulation Wheel",
+                    2 => "Breath Controller",
+                    7 => "Volume",
+                    11 => "Expression",
+                    64 => "Sustain Pedal",
+                    74 => "Brightness/Timbre",
+                    _ => "Unknown CC",
+                };
+                format!(
+                    "Control Change (Ch {}, CC {} [{}], Val {})",
+                    channel, cc, purpose, val
+                )
+            } else {
+                "Control Change (Malformed)".to_string()
+            }
+        }
+        0xD => {
+            if bytes.len() >= 2 {
+                format!("Channel Pressure (Ch {}, Pressure {})", channel, bytes[1])
+            } else {
+                "Channel Pressure (Malformed)".to_string()
+            }
+        }
+        0xE => {
+            if bytes.len() >= 3 {
+                let bend = (bytes[1] as u16) | ((bytes[2] as u16) << 7);
+                format!("Pitch Bend (Ch {}, Value {})", channel, bend)
+            } else {
+                "Pitch Bend (Malformed)".to_string()
+            }
+        }
+        _ => format!("Unknown Status 0x{:X}", status),
+    }
 }
 
 /// Encodes a sensor event as a postcard + COBS frame (format expected by the HIL firmware).
