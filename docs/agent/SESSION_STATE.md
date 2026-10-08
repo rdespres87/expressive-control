@@ -14,7 +14,7 @@ Design and implement a debug telemetry system for tracing MIDI messages, raw sen
 - Implemented TinyUSB Native USB-MIDI transport.
 - Defined UART telemetry protocol (`TunerState`) and integrated Slint UI.
 - Simulated tuning search gliding in `theremin_scenario.yml`.
-- Rendered UI tuner as a strobe-style semi-circle arc gauge.
+- Finalized UI tuner design as a high-resolution strobe-style radial LED gauge (101 segments).
 
 ## Next action
 - Design the debug telemetry structure (what events to trace, how to output them: RTT, UART, or USB Serial).
