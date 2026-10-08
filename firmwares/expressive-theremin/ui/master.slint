@@ -10,7 +10,8 @@ export component MasterWindow inherits Window {
     in-out property <int> octave_range: 2;
     in-out property <int> pitch_quantization: 50; // 0, 25, 50, 75, 100
     in-out property <string> filter_speed: "Fast";
-    in-out property <int> pb_range: 48; // 2, 12, 24, 48
+    in-out property <string> midi_mode: "Standard";
+    in-out property <int> pb_range: 2; // 2, 12, 24, 48
 
     // Callbacks to simulate touching the UI
     callback root_changed(string);
@@ -19,6 +20,7 @@ export component MasterWindow inherits Window {
     callback range_changed(int);
     callback quantization_changed(int);
     callback filter_changed(string);
+    callback midi_mode_changed(string);
     callback pb_range_changed(int);
 
     // Theme
@@ -103,7 +105,7 @@ export component MasterWindow inherits Window {
             }
         }
 
-        // ROW 2: Range Settings (Base Octave & Octave Range)
+        // ROW 2: Range Settings (Base Octave & Octave Range & MIDI settings)
         HorizontalLayout {
             spacing: 15px;
             height: 130px;
@@ -112,17 +114,17 @@ export component MasterWindow inherits Window {
             Rectangle {
                 background: panel_bg;
                 border-radius: 12px;
-                width: 33%;
+                width: 25%;
                 VerticalLayout {
                     padding: 10px; spacing: 10px; alignment: center;
-                    Text { text: "BASE OCTAVE"; color: dim_text; font-size: 16px; font-weight: 700; horizontal-alignment: center; }
+                    Text { text: "BASE OCTAVE"; color: dim_text; font-size: 14px; font-weight: 700; horizontal-alignment: center; }
                     HorizontalLayout {
-                        alignment: center; spacing: 20px;
+                        alignment: center; spacing: 10px;
                         TouchArea {
-                            width: 50px; height: 50px;
+                            width: 40px; height: 40px;
                             Rectangle {
-                                width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
-                                Text { text: "-"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
+                                width: 100%; height: 100%; border-radius: 20px; background: parent.pressed ? accent.darker(0.5) : #333340;
+                                Text { text: "-"; color: text_color; font-size: 30px; horizontal-alignment: center; vertical-alignment: center; }
                             }
                             clicked => { 
                                 if (root.current_octave > -1) { 
@@ -131,12 +133,12 @@ export component MasterWindow inherits Window {
                                 } 
                             }
                         }
-                        Text { text: root.current_octave; font-size: 40px; font-weight: 800; color: text_color; horizontal-alignment: center; vertical-alignment: center; width: 40px; }
+                        Text { text: root.current_octave; font-size: 30px; font-weight: 800; color: text_color; horizontal-alignment: center; vertical-alignment: center; width: 30px; }
                         TouchArea {
-                            width: 50px; height: 50px;
+                            width: 40px; height: 40px;
                             Rectangle {
-                                width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
-                                Text { text: "+"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
+                                width: 100%; height: 100%; border-radius: 20px; background: parent.pressed ? accent.darker(0.5) : #333340;
+                                Text { text: "+"; color: text_color; font-size: 30px; horizontal-alignment: center; vertical-alignment: center; }
                             }
                             clicked => { 
                                 if (root.current_octave < 9) { 
@@ -153,17 +155,17 @@ export component MasterWindow inherits Window {
             Rectangle {
                 background: panel_bg;
                 border-radius: 12px;
-                width: 33%;
+                width: 25%;
                 VerticalLayout {
                     padding: 10px; spacing: 10px; alignment: center;
-                    Text { text: "OCTAVE RANGE"; color: dim_text; font-size: 16px; font-weight: 700; horizontal-alignment: center; }
+                    Text { text: "OCTAVE RANGE"; color: dim_text; font-size: 14px; font-weight: 700; horizontal-alignment: center; }
                     HorizontalLayout {
-                        alignment: center; spacing: 20px;
+                        alignment: center; spacing: 10px;
                         TouchArea {
-                            width: 50px; height: 50px;
+                            width: 40px; height: 40px;
                             Rectangle {
-                                width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
-                                Text { text: "-"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
+                                width: 100%; height: 100%; border-radius: 20px; background: parent.pressed ? accent.darker(0.5) : #333340;
+                                Text { text: "-"; color: text_color; font-size: 30px; horizontal-alignment: center; vertical-alignment: center; }
                             }
                             clicked => { 
                                 if (root.octave_range > 1) { 
@@ -172,12 +174,12 @@ export component MasterWindow inherits Window {
                                 } 
                             }
                         }
-                        Text { text: root.octave_range; font-size: 40px; font-weight: 800; color: text_color; horizontal-alignment: center; vertical-alignment: center; width: 40px; }
+                        Text { text: root.octave_range; font-size: 30px; font-weight: 800; color: text_color; horizontal-alignment: center; vertical-alignment: center; width: 30px; }
                         TouchArea {
-                            width: 50px; height: 50px;
+                            width: 40px; height: 40px;
                             Rectangle {
-                                width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
-                                Text { text: "+"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
+                                width: 100%; height: 100%; border-radius: 20px; background: parent.pressed ? accent.darker(0.5) : #333340;
+                                Text { text: "+"; color: text_color; font-size: 30px; horizontal-alignment: center; vertical-alignment: center; }
                             }
                             clicked => { 
                                 if (root.octave_range < 7) { 
@@ -189,21 +191,55 @@ export component MasterWindow inherits Window {
                     }
                 }
             }
+            
+            // MIDI Mode
+            Rectangle {
+                background: panel_bg;
+                border-radius: 12px;
+                width: 25%;
+                VerticalLayout {
+                    padding: 10px; spacing: 10px; alignment: center;
+                    Text { text: "MIDI MODE"; color: dim_text; font-size: 14px; font-weight: 700; horizontal-alignment: center; }
+                    HorizontalLayout {
+                        spacing: 10px; alignment: center;
+                        for mode in ["Standard", "MPE"]: TouchArea {
+                            Rectangle {
+                                border-radius: 8px;
+                                background: root.midi_mode == mode ? accent : #333340;
+                                Text { text: mode; color: root.midi_mode == mode ? #000000 : text_color; font-size: 16px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            clicked => { 
+                                root.midi_mode = mode;
+                                // Automatically adjust PB range to logical defaults
+                                if (mode == "Standard") {
+                                    root.pb_range = 2;
+                                    root.pb_range_changed(2);
+                                } else {
+                                    root.pb_range = 48;
+                                    root.pb_range_changed(48);
+                                }
+                                root.midi_mode_changed(mode); 
+                            }
+                        }
+                    }
+                }
+            }
+
             // Pitch Bend Range
             Rectangle {
                 background: panel_bg;
                 border-radius: 12px;
-                width: 34%;
+                width: 25%;
                 VerticalLayout {
                     padding: 10px; spacing: 10px; alignment: center;
-                    Text { text: "MIDI PB RANGE (MPE=48)"; color: dim_text; font-size: 16px; font-weight: 700; horizontal-alignment: center; }
+                    Text { text: "PB RANGE"; color: dim_text; font-size: 14px; font-weight: 700; horizontal-alignment: center; }
                     HorizontalLayout {
-                        spacing: 10px; alignment: center;
+                        spacing: 5px; alignment: center;
                         for val in [2, 12, 24, 48]: TouchArea {
                             Rectangle {
                                 border-radius: 8px;
                                 background: root.pb_range == val ? accent : #333340;
-                                Text { text: val; color: root.pb_range == val ? #000000 : text_color; font-size: 20px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: val; color: root.pb_range == val ? #000000 : text_color; font-size: 16px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
                             }
                             clicked => { 
                                 root.pb_range = val;

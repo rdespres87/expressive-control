@@ -206,13 +206,47 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
     });
 
     let tx_pb = config_tx.clone();
+    let ui_master_clone = ui_master.as_weak();
     ui_master.on_pb_range_changed(move |r| {
-        println!("Master UI [Touch]: PB Range changed to {}", r);
-        println!("UART TX (Master -> Slave): SetProcessorMode(MPE, {})", r);
-        let _ = tx_pb.send(ConfigMessage::SetProcessorMode(ProcessorMode::Mpe {
-            manager_channel: Channel::new(0),
-            pitch_bend_range: r as u8,
-        }));
+        if let Some(ui) = ui_master_clone.upgrade() {
+            let mode = ui.get_midi_mode();
+            println!("Master UI [Touch]: PB Range changed to {}", r);
+            let proc_mode = if mode == "MPE" {
+                ProcessorMode::Mpe {
+                    manager_channel: Channel::new(0),
+                    pitch_bend_range: r as u8,
+                }
+            } else {
+                ProcessorMode::Standard {
+                    channel: Channel::new(0),
+                    pitch_bend_range: r as u8,
+                }
+            };
+            println!("UART TX (Master -> Slave): SetProcessorMode({:?})", proc_mode);
+            let _ = tx_pb.send(ConfigMessage::SetProcessorMode(proc_mode));
+        }
+    });
+
+    let tx_mode = config_tx.clone();
+    let ui_master_clone2 = ui_master.as_weak();
+    ui_master.on_midi_mode_changed(move |m| {
+        if let Some(ui) = ui_master_clone2.upgrade() {
+            let r = ui.get_pb_range();
+            println!("Master UI [Touch]: MIDI Mode changed to {}", m);
+            let proc_mode = if m == "MPE" {
+                ProcessorMode::Mpe {
+                    manager_channel: Channel::new(0),
+                    pitch_bend_range: r as u8,
+                }
+            } else {
+                ProcessorMode::Standard {
+                    channel: Channel::new(0),
+                    pitch_bend_range: r as u8,
+                }
+            };
+            println!("UART TX (Master -> Slave): SetProcessorMode({:?})", proc_mode);
+            let _ = tx_mode.send(ConfigMessage::SetProcessorMode(proc_mode));
+        }
     });
 
     let tx_quant = config_tx.clone();
