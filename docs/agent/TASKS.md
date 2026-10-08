@@ -33,3 +33,4 @@
 - [x] Implement a debug telemetry system for tracing MIDI messages, raw sensor values, and processor state
 - [ ] Implement Composite USB device (MIDI + CDC) via TinyUSB to support Hardware-In-The-Loop (HIL) simulation
 - [ ] Implement `esp-serial-flasher` embedded in Master to safely flash Slave via UART (Dual-board OTA update)
+- [ ] Develop a host GUI tool (Telemetry Viewer) to receive, decode, and display hardware logs in a human-readable format (timestamp + raw + decoded MIDI/state)
