@@ -4,85 +4,128 @@ export component MasterWindow inherits Window {
     background: #0c0b0f;
     title: "Theremin Config (Master)";
 
+    in property <string> current_root: "C";
     in property <string> current_scale: "Chromatic";
     in property <int> current_octave: 4;
-    in property <int> midi_channel: 1;
+    in property <int> octave_range: 3;
+    in property <int> pitch_quantization: 50; // 0, 25, 50, 75, 100
+    in property <string> filter_speed: "Fast";
 
     // Callbacks to simulate touching the UI
+    callback root_changed(string);
     callback scale_changed(string);
     callback octave_changed(int);
-    callback channel_changed(int);
+    callback range_changed(int);
+    callback quantization_changed(int);
+    callback filter_changed(string);
 
     // Theme
     property <color> accent: #00f0ff;
     property <color> text_color: #ffffff;
     property <color> dim_text: #666670;
     property <color> panel_bg: #1a1a24;
+    
+    // Helper function for roots
+    property <[string]> roots: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    property <int> root_idx: 0;
 
     VerticalLayout {
-        padding: 30px;
-        spacing: 20px;
+        padding: 20px;
+        spacing: 15px;
 
-        // Header
-        Text {
-            text: "MASTER CONFIGURATION";
-            font-size: 32px;
-            font-weight: 900;
-            color: accent;
-            letter-spacing: 2px;
-            horizontal-alignment: center;
-        }
-
-        Rectangle {
-            height: 2px;
-            background: accent;
-            width: 100%;
-        }
-
+        // ROW 1: Tonal Settings (Root & Scale)
         HorizontalLayout {
-            spacing: 20px;
-
-            // Octave Panel
+            spacing: 15px;
+            height: 130px;
+            
+            // Root Note
             Rectangle {
                 background: panel_bg;
-                border-radius: 15px;
-                width: 30%;
-
+                border-radius: 12px;
+                width: 40%;
                 VerticalLayout {
-                    padding: 20px;
-                    spacing: 15px;
-                    alignment: center;
-
-                    Text { text: "OCTAVE"; color: dim_text; font-size: 20px; font-weight: 700; horizontal-alignment: center; }
-                    
+                    padding: 10px; spacing: 10px; alignment: center;
+                    Text { text: "ROOT NOTE"; color: dim_text; font-size: 16px; font-weight: 700; horizontal-alignment: center; }
                     HorizontalLayout {
-                        alignment: center;
-                        spacing: 20px;
-                        
+                        alignment: center; spacing: 20px;
                         TouchArea {
-                            width: 60px; height: 60px;
+                            width: 50px; height: 50px;
                             Rectangle {
-                                width: 100%; height: 100%; border-radius: 30px;
-                                background: parent.pressed ? accent.darker(0.5) : #333340;
+                                width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
+                                Text { text: "<"; color: text_color; font-size: 30px; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            clicked => { 
+                                root.root_idx = root.root_idx > 0 ? root.root_idx - 1 : 11;
+                                root.root_changed(root.roots[root.root_idx]); 
+                            }
+                        }
+                        Text { text: root.roots[root.root_idx]; font-size: 40px; font-weight: 800; color: text_color; horizontal-alignment: center; vertical-alignment: center; width: 60px; }
+                        TouchArea {
+                            width: 50px; height: 50px;
+                            Rectangle {
+                                width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
+                                Text { text: ">"; color: text_color; font-size: 30px; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            clicked => { 
+                                root.root_idx = root.root_idx < 11 ? root.root_idx + 1 : 0;
+                                root.root_changed(root.roots[root.root_idx]); 
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Scale
+            Rectangle {
+                background: panel_bg;
+                border-radius: 12px;
+                width: 60%;
+                VerticalLayout {
+                    padding: 10px; spacing: 10px; alignment: center;
+                    Text { text: "SCALE"; color: dim_text; font-size: 16px; font-weight: 700; horizontal-alignment: center; }
+                    HorizontalLayout {
+                        spacing: 10px; alignment: center;
+                        for scale in ["Chromatic", "Major", "Minor", "Penta"]: TouchArea {
+                            Rectangle {
+                                border-radius: 8px;
+                                background: root.current_scale == scale ? accent : #333340;
+                                Text { text: scale; color: root.current_scale == scale ? #000000 : text_color; font-size: 20px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            clicked => { root.scale_changed(scale); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ROW 2: Range Settings (Base Octave & Octave Range)
+        HorizontalLayout {
+            spacing: 15px;
+            height: 130px;
+            
+            // Base Octave
+            Rectangle {
+                background: panel_bg;
+                border-radius: 12px;
+                width: 50%;
+                VerticalLayout {
+                    padding: 10px; spacing: 10px; alignment: center;
+                    Text { text: "BASE OCTAVE"; color: dim_text; font-size: 16px; font-weight: 700; horizontal-alignment: center; }
+                    HorizontalLayout {
+                        alignment: center; spacing: 20px;
+                        TouchArea {
+                            width: 50px; height: 50px;
+                            Rectangle {
+                                width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
                                 Text { text: "-"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
                             }
                             clicked => { if (root.current_octave > -1) { root.octave_changed(root.current_octave - 1); } }
                         }
-                        
-                        Text {
-                            text: root.current_octave;
-                            font-size: 60px;
-                            font-weight: 800;
-                            color: text_color;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
-                        }
-                        
+                        Text { text: root.current_octave; font-size: 40px; font-weight: 800; color: text_color; horizontal-alignment: center; vertical-alignment: center; width: 40px; }
                         TouchArea {
-                            width: 60px; height: 60px;
+                            width: 50px; height: 50px;
                             Rectangle {
-                                width: 100%; height: 100%; border-radius: 30px;
-                                background: parent.pressed ? accent.darker(0.5) : #333340;
+                                width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
                                 Text { text: "+"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
                             }
                             clicked => { if (root.current_octave < 9) { root.octave_changed(root.current_octave + 1); } }
@@ -91,44 +134,82 @@ export component MasterWindow inherits Window {
                 }
             }
 
-            // Scale Panel
+            // Octave Range
             Rectangle {
                 background: panel_bg;
-                border-radius: 15px;
-                width: 70%;
-
+                border-radius: 12px;
+                width: 50%;
                 VerticalLayout {
-                    padding: 20px;
-                    spacing: 15px;
-
-                    Text { text: "SCALE"; color: dim_text; font-size: 20px; font-weight: 700; horizontal-alignment: center; }
-                    
+                    padding: 10px; spacing: 10px; alignment: center;
+                    Text { text: "OCTAVE RANGE"; color: dim_text; font-size: 16px; font-weight: 700; horizontal-alignment: center; }
                     HorizontalLayout {
-                        spacing: 10px;
-                        // For simplicity in the mockup, we hardcode 3 scales. In a real app we might use a ListView.
+                        alignment: center; spacing: 20px;
                         TouchArea {
+                            width: 50px; height: 50px;
                             Rectangle {
-                                border-radius: 10px;
-                                background: root.current_scale == "Chromatic" ? accent : #333340;
-                                Text { text: "Chromatic"; color: root.current_scale == "Chromatic" ? #000000 : text_color; font-size: 24px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                                width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
+                                Text { text: "-"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
                             }
-                            clicked => { root.scale_changed("Chromatic"); }
+                            clicked => { if (root.octave_range > 1) { root.range_changed(root.octave_range - 1); } }
                         }
+                        Text { text: root.octave_range; font-size: 40px; font-weight: 800; color: text_color; horizontal-alignment: center; vertical-alignment: center; width: 40px; }
                         TouchArea {
+                            width: 50px; height: 50px;
                             Rectangle {
-                                border-radius: 10px;
-                                background: root.current_scale == "Major" ? accent : #333340;
-                                Text { text: "Major"; color: root.current_scale == "Major" ? #000000 : text_color; font-size: 24px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                                width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
+                                Text { text: "+"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
                             }
-                            clicked => { root.scale_changed("Major"); }
+                            clicked => { if (root.octave_range < 7) { root.range_changed(root.octave_range + 1); } }
                         }
-                        TouchArea {
+                    }
+                }
+            }
+        }
+
+        // ROW 3: Theremin Specific (Quantization & Filter)
+        HorizontalLayout {
+            spacing: 15px;
+            height: 130px;
+
+            // Pitch Quantization (Correction)
+            Rectangle {
+                background: panel_bg;
+                border-radius: 12px;
+                width: 60%;
+                VerticalLayout {
+                    padding: 10px; spacing: 10px; alignment: center;
+                    Text { text: "PITCH CORRECTION (QUANTIZATION)"; color: dim_text; font-size: 16px; font-weight: 700; horizontal-alignment: center; }
+                    HorizontalLayout {
+                        spacing: 10px; alignment: center;
+                        for val in [0, 25, 50, 75, 100]: TouchArea {
                             Rectangle {
-                                border-radius: 10px;
-                                background: root.current_scale == "Minor" ? accent : #333340;
-                                Text { text: "Minor"; color: root.current_scale == "Minor" ? #000000 : text_color; font-size: 24px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                                border-radius: 8px;
+                                background: root.pitch_quantization == val ? accent : #333340;
+                                Text { text: val + "%"; color: root.pitch_quantization == val ? #000000 : text_color; font-size: 20px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
                             }
-                            clicked => { root.scale_changed("Minor"); }
+                            clicked => { root.quantization_changed(val); }
+                        }
+                    }
+                }
+            }
+
+            // Filter Speed
+            Rectangle {
+                background: panel_bg;
+                border-radius: 12px;
+                width: 40%;
+                VerticalLayout {
+                    padding: 10px; spacing: 10px; alignment: center;
+                    Text { text: "RESPONSE FILTER"; color: dim_text; font-size: 16px; font-weight: 700; horizontal-alignment: center; }
+                    HorizontalLayout {
+                        spacing: 10px; alignment: center;
+                        for speed in ["Slow", "Med", "Fast"]: TouchArea {
+                            Rectangle {
+                                border-radius: 8px;
+                                background: root.filter_speed == speed ? accent : #333340;
+                                Text { text: speed; color: root.filter_speed == speed ? #000000 : text_color; font-size: 20px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            clicked => { root.filter_changed(speed); }
                         }
                     }
                 }
