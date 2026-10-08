@@ -81,7 +81,13 @@ Using **two** Elecrow 5.0" boards (one for each hand) is an excellent architectu
 ### 7.3 Communication & Hardware Impact
 *   **Power Supply:** A single Elecrow 5.0" screen draws ~400mA. Two boards will draw ~1A combined (5W). Modern Macs easily supply >30W per port, so a single USB connection to the Master board (which then powers the Slave board via its 5V expansion pins) will work perfectly without brownouts.
 *   **Sensor Topology:** To guarantee 0ms synchronization drift between the two hands, **BOTH VL53L4CD ToF sensors must be wired to the Master board**. 
-*   **Data Link:** The Master board and Slave board will communicate via a **Serial UART** cable (TX/RX/GND). 
+*   **Master-to-Slave Data Link & Safe OTA Update:** The Master and Slave will be connected by a 5-wire harness:
+    1.  `GND`: Common ground.
+    2.  `Master TX` -> `Slave RX`: For real-time Pitch telemetry and firmware flashing.
+    3.  `Master RX` <- `Slave TX`: For Slint UI interactivity (touch screen menus).
+    4.  `Master GPIO_A` -> `Slave EN` (Reset): Allows the Master to physically reboot the Slave.
+    5.  `Master GPIO_B` -> `Slave BOOT0` (GPIO 0): Allows the Master to force the Slave into ROM Bootloader mode.
+    *Note: Controlling `EN` and `BOOT0` guarantees a 100% unbrickable dual-board OTA update architecture using the `esp-serial-flasher` library on the Master.* 
 
 ### 7.4 UART "Plug & Play" Architecture
 To support seamlessly starting with 1 screen and upgrading to 2 screens later, the firmware implements a "Plug & Play" heartbeat mechanism over UART:
