@@ -88,11 +88,16 @@ impl TofThereminProcessor {
 }
 
 impl ControlProcessor for TofThereminProcessor {
-    fn process_event(
+    fn process_event<T: expressive_core::telemetry::TelemetryHandler>(
         &mut self,
         event: SensorEvent,
         out_buffer: &mut [InstrumentEvent],
+        telemetry: &mut T,
     ) -> Result<usize, ProcessorError> {
+        telemetry.handle(expressive_core::telemetry::TelemetryEvent::SensorReceived(
+            &event,
+        ));
+
         match event {
             SensorEvent::Position3D { id, x: _, y: _, z } => {
                 if id == 0 {
@@ -115,6 +120,7 @@ impl ControlProcessor for TofThereminProcessor {
                                 note: self.base_note,
                                 velocity: self.current_volume,
                             };
+                            telemetry.handle(expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(&out_buffer[idx]));
                             idx += 1;
                             self.note_on_sent = true;
                         } else if note != prev_note {
@@ -126,12 +132,14 @@ impl ControlProcessor for TofThereminProcessor {
                                 note: prev_note,
                                 velocity: U7::new(0),
                             };
+                            telemetry.handle(expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(&out_buffer[idx]));
                             idx += 1;
                             out_buffer[idx] = InstrumentEvent::NoteOn {
                                 channel: Channel::new(1),
                                 note: self.base_note,
                                 velocity: self.current_volume,
                             };
+                            telemetry.handle(expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(&out_buffer[idx]));
                             idx += 1;
                         }
 
@@ -142,6 +150,11 @@ impl ControlProcessor for TofThereminProcessor {
                             channel: Channel::new(1),
                             bend: self.current_pitch_bend,
                         };
+                        telemetry.handle(
+                            expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(
+                                &out_buffer[idx],
+                            ),
+                        );
                         idx += 1;
                     }
                     Ok(idx)
@@ -161,11 +174,13 @@ impl ControlProcessor for TofThereminProcessor {
                                 note: self.base_note,
                                 velocity: self.current_volume,
                             };
+                            telemetry.handle(expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(&out_buffer[idx]));
                             idx += 1;
                             out_buffer[idx] = InstrumentEvent::PitchBend {
                                 channel: Channel::new(1),
                                 bend: self.current_pitch_bend,
                             };
+                            telemetry.handle(expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(&out_buffer[idx]));
                             idx += 1;
                             self.note_on_sent = true;
                         } else if prev_vol > 0
@@ -180,6 +195,7 @@ impl ControlProcessor for TofThereminProcessor {
                                 note: self.base_note,
                                 velocity: U7::new(0),
                             };
+                            telemetry.handle(expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(&out_buffer[idx]));
                             idx += 1;
                             self.note_on_sent = false;
                         }
@@ -192,6 +208,7 @@ impl ControlProcessor for TofThereminProcessor {
                                 channel: Channel::new(1),
                                 pressure: self.current_volume,
                             };
+                            telemetry.handle(expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(&out_buffer[idx]));
                             idx += 1;
                         }
                     }
@@ -213,6 +230,11 @@ impl ControlProcessor for TofThereminProcessor {
                             note: self.base_note,
                             velocity: U7::new(0),
                         };
+                        telemetry.handle(
+                            expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(
+                                &out_buffer[idx],
+                            ),
+                        );
                         idx += 1;
                         self.note_on_sent = false;
                     }
@@ -228,6 +250,11 @@ impl ControlProcessor for TofThereminProcessor {
                             note: self.base_note,
                             velocity: U7::new(0),
                         };
+                        telemetry.handle(
+                            expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(
+                                &out_buffer[idx],
+                            ),
+                        );
                         idx += 1;
                         self.note_on_sent = false;
                     }
@@ -287,6 +314,7 @@ mod tests {
             note: U7::new(0),
             velocity: U7::new(0),
         }; 2];
+        let mut t = expressive_core::telemetry::NoopTelemetry;
 
         processor
             .process_event(
@@ -297,6 +325,7 @@ mod tests {
                     z: 20,
                 },
                 &mut buffer,
+                &mut t,
             )
             .unwrap();
 
@@ -310,6 +339,7 @@ mod tests {
                     z: 500,
                 },
                 &mut buffer,
+                &mut t,
             )
             .unwrap();
         assert_eq!(count, 2);

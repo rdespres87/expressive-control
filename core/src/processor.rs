@@ -20,10 +20,11 @@ pub trait ControlProcessor {
     /// Processes a single sensor event.
     /// Writes the resulting MPE events into `out_buffer`.
     /// Returns the number of events written to avoid dynamic allocation.
-    fn process_event(
+    fn process_event<T: crate::telemetry::TelemetryHandler>(
         &mut self,
         event: SensorEvent,
         out_buffer: &mut [InstrumentEvent],
+        telemetry: &mut T,
     ) -> Result<usize, ProcessorError>;
 }
 
@@ -42,11 +43,14 @@ impl Default for MpeInstrument {
 }
 
 impl ControlProcessor for MpeInstrument {
-    fn process_event(
+    fn process_event<T: crate::telemetry::TelemetryHandler>(
         &mut self,
         event: SensorEvent,
         out_buffer: &mut [InstrumentEvent],
+        telemetry: &mut T,
     ) -> Result<usize, ProcessorError> {
+        telemetry.handle(crate::telemetry::TelemetryEvent::SensorReceived(&event));
+
         match event {
             SensorEvent::Touch { id, x, y: _, force } => {
                 if out_buffer.len() < 2 {
@@ -73,6 +77,11 @@ impl ControlProcessor for MpeInstrument {
                     base_note,
                 });
 
+                telemetry.handle(crate::telemetry::TelemetryEvent::VoiceAllocated {
+                    touch_id: id,
+                    channel: channel.as_u8(),
+                });
+
                 out_buffer[0] = InstrumentEvent::NoteOn {
                     channel,
                     note: base_note,
@@ -82,6 +91,13 @@ impl ControlProcessor for MpeInstrument {
                     channel,
                     pressure: U7::new(force >> 1),
                 };
+
+                telemetry.handle(crate::telemetry::TelemetryEvent::InstrumentEventGenerated(
+                    &out_buffer[0],
+                ));
+                telemetry.handle(crate::telemetry::TelemetryEvent::InstrumentEventGenerated(
+                    &out_buffer[1],
+                ));
 
                 Ok(2)
             }
@@ -109,6 +125,14 @@ impl ControlProcessor for MpeInstrument {
                         channel,
                         value: U7::new(y >> 1),
                     };
+
+                    telemetry.handle(crate::telemetry::TelemetryEvent::InstrumentEventGenerated(
+                        &out_buffer[0],
+                    ));
+                    telemetry.handle(crate::telemetry::TelemetryEvent::InstrumentEventGenerated(
+                        &out_buffer[1],
+                    ));
+
                     Ok(2)
                 } else {
                     Ok(0)
@@ -131,11 +155,22 @@ impl ControlProcessor for MpeInstrument {
                     });
 
                 if let Some((index, voice)) = released {
+                    let channel = Channel::new(index as u8 + 1);
+                    telemetry.handle(crate::telemetry::TelemetryEvent::VoiceReleased {
+                        touch_id: id,
+                        channel: channel.as_u8(),
+                    });
+
                     out_buffer[0] = InstrumentEvent::NoteOff {
-                        channel: Channel::new(index as u8 + 1),
+                        channel,
                         note: voice.base_note,
                         velocity: U7::new(0),
                     };
+
+                    telemetry.handle(crate::telemetry::TelemetryEvent::InstrumentEventGenerated(
+                        &out_buffer[0],
+                    ));
+
                     Ok(1)
                 } else {
                     Ok(0)
@@ -170,8 +205,12 @@ mod tests {
     fn touch_allocates_first_member_channel() {
         let mut mpe = MpeInstrument::default();
         let mut out = [PLACEHOLDER; 4];
+        let mut t = crate::telemetry::NoopTelemetry;
 
-        assert_eq!(mpe.process_event(touch(42, 64, 200), &mut out), Ok(2));
+        assert_eq!(
+            mpe.process_event(touch(42, 64, 200), &mut out, &mut t),
+            Ok(2)
+        );
         assert_eq!(
             out[0],
             InstrumentEvent::NoteOn {
@@ -195,7 +234,10 @@ mod tests {
             })
         );
 
-        assert_eq!(mpe.process_event(touch(43, 65, 10), &mut out), Ok(2));
+        assert_eq!(
+            mpe.process_event(touch(43, 65, 10), &mut out, &mut t),
+            Ok(2)
+        );
         assert!(
             matches!(out[0], InstrumentEvent::NoteOn { channel, .. } if channel == Channel::new(2))
         );
@@ -205,11 +247,12 @@ mod tests {
     fn sixteenth_touch_cannot_be_allocated() {
         let mut mpe = MpeInstrument::default();
         let mut out = [PLACEHOLDER; 2];
+        let mut t = crate::telemetry::NoopTelemetry;
         for id in 0..15 {
-            assert_eq!(mpe.process_event(touch(id, 60, 0), &mut out), Ok(2));
+            assert_eq!(mpe.process_event(touch(id, 60, 0), &mut out, &mut t), Ok(2));
         }
         assert_eq!(
-            mpe.process_event(touch(15, 60, 0), &mut out),
+            mpe.process_event(touch(15, 60, 0), &mut out, &mut t),
             Err(ProcessorError::VoiceStealingFailed)
         );
     }
@@ -219,17 +262,22 @@ mod tests {
         let mut mpe = MpeInstrument::default();
         let mut one = [PLACEHOLDER; 1];
         let mut none: [InstrumentEvent; 0] = [];
+        let mut t = crate::telemetry::NoopTelemetry;
 
         assert_eq!(
-            mpe.process_event(touch(1, 60, 0), &mut one),
+            mpe.process_event(touch(1, 60, 0), &mut one, &mut t),
             Err(ProcessorError::BufferTooSmall)
         );
         assert_eq!(
-            mpe.process_event(SensorEvent::Position { id: 1, x: 0, y: 0 }, &mut one),
+            mpe.process_event(
+                SensorEvent::Position { id: 1, x: 0, y: 0 },
+                &mut one,
+                &mut t
+            ),
             Err(ProcessorError::BufferTooSmall)
         );
         assert_eq!(
-            mpe.process_event(SensorEvent::Released { id: 1 }, &mut none),
+            mpe.process_event(SensorEvent::Released { id: 1 }, &mut none, &mut t),
             Err(ProcessorError::BufferTooSmall)
         );
         // Nothing was allocated by the rejected touch.
@@ -240,11 +288,12 @@ mod tests {
     fn position_scales_x_to_14_bit_bend_and_y_to_timbre() {
         let mut mpe = MpeInstrument::default();
         let mut out = [PLACEHOLDER; 2];
-        assert_eq!(mpe.process_event(touch(7, 60, 0), &mut out), Ok(2));
+        let mut t = crate::telemetry::NoopTelemetry;
+        assert_eq!(mpe.process_event(touch(7, 60, 0), &mut out, &mut t), Ok(2));
 
         for (x, expected) in [(0u8, 0u16), (128, 8224), (255, 16383)] {
             let event = SensorEvent::Position { id: 7, x, y: 200 };
-            assert_eq!(mpe.process_event(event, &mut out), Ok(2));
+            assert_eq!(mpe.process_event(event, &mut out, &mut t), Ok(2));
             assert_eq!(
                 out[0],
                 InstrumentEvent::PitchBend {
@@ -266,6 +315,7 @@ mod tests {
     fn unknown_touches_and_3d_positions_are_ignored() {
         let mut mpe = MpeInstrument::default();
         let mut out = [PLACEHOLDER; 2];
+        let mut t = crate::telemetry::NoopTelemetry;
         let ignored = [
             SensorEvent::Position { id: 9, x: 1, y: 1 },
             SensorEvent::Released { id: 9 },
@@ -277,7 +327,7 @@ mod tests {
             },
         ];
         for event in ignored {
-            assert_eq!(mpe.process_event(event, &mut out), Ok(0));
+            assert_eq!(mpe.process_event(event, &mut out, &mut t), Ok(0));
         }
     }
 
@@ -285,11 +335,12 @@ mod tests {
     fn release_frees_the_voice_for_reuse() {
         let mut mpe = MpeInstrument::default();
         let mut out = [PLACEHOLDER; 2];
-        assert_eq!(mpe.process_event(touch(1, 60, 0), &mut out), Ok(2));
-        assert_eq!(mpe.process_event(touch(2, 72, 0), &mut out), Ok(2));
+        let mut t = crate::telemetry::NoopTelemetry;
+        assert_eq!(mpe.process_event(touch(1, 60, 0), &mut out, &mut t), Ok(2));
+        assert_eq!(mpe.process_event(touch(2, 72, 0), &mut out, &mut t), Ok(2));
 
         assert_eq!(
-            mpe.process_event(SensorEvent::Released { id: 1 }, &mut out),
+            mpe.process_event(SensorEvent::Released { id: 1 }, &mut out, &mut t),
             Ok(1)
         );
         assert_eq!(
@@ -305,12 +356,12 @@ mod tests {
 
         // Releasing twice is a no-op.
         assert_eq!(
-            mpe.process_event(SensorEvent::Released { id: 1 }, &mut out),
+            mpe.process_event(SensorEvent::Released { id: 1 }, &mut out, &mut t),
             Ok(0)
         );
 
         // The freed channel is handed to the next touch.
-        assert_eq!(mpe.process_event(touch(3, 50, 0), &mut out), Ok(2));
+        assert_eq!(mpe.process_event(touch(3, 50, 0), &mut out, &mut t), Ok(2));
         assert!(
             matches!(out[0], InstrumentEvent::NoteOn { channel, .. } if channel == Channel::new(1))
         );

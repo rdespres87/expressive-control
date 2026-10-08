@@ -3,6 +3,7 @@
 pub mod midi;
 
 pub mod processor;
+pub mod telemetry;
 
 // --- Type Safety Wrappers ---
 

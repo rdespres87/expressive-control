@@ -389,6 +389,14 @@ async fn run_master() -> Result<(), FirmwareError> {
         velocity: expressive_core::U7::new(0),
     }; 10];
 
+    struct LoggerTelemetry;
+    impl expressive_core::telemetry::TelemetryHandler for LoggerTelemetry {
+        fn handle(&mut self, event: expressive_core::telemetry::TelemetryEvent) {
+            log::debug!("[Telemetry] {:?}", event); // Using debug to not spam the console too much
+        }
+    }
+    let mut telemetry = LoggerTelemetry;
+
     log::info!("Entering main async interrupt loop...");
     loop {
         use embassy_futures::select::{select, Either};
@@ -402,8 +410,9 @@ async fn run_master() -> Result<(), FirmwareError> {
                 match read_pending_distance(&mut sensor_pitch).await {
                     Ok(distance) => {
                         let event = SensorEvent::Position3D { id: 0, x: 0, y: 0, z: distance };
-                        if let Ok(count) = processor.process_event(event, &mut out_buffer) {
+                        if let Ok(count) = processor.process_event(event, &mut out_buffer, &mut telemetry) {
                             for ev in out_buffer.iter().take(count) {
+                                // We already get telemetry logs, but we keep this info log for the USB transmission.
                                 log::info!("Generated Event (Pitch): {ev:?}");
                                 send_usb_midi(ev.to_midi().as_slice());
                             }
@@ -421,7 +430,7 @@ async fn run_master() -> Result<(), FirmwareError> {
                 match read_pending_distance(&mut sensor_vol).await {
                     Ok(distance) => {
                         let event = SensorEvent::Position3D { id: 1, x: 0, y: 0, z: distance };
-                        if let Ok(count) = processor.process_event(event, &mut out_buffer) {
+                        if let Ok(count) = processor.process_event(event, &mut out_buffer, &mut telemetry) {
                             for ev in out_buffer.iter().take(count) {
                                 log::info!("Generated Event (Volume): {ev:?}");
                                 send_usb_midi(ev.to_midi().as_slice());

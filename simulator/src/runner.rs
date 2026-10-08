@@ -48,12 +48,13 @@ where
     };
     let mut out_buffer = [placeholder; OUT_BUFFER_LEN];
     let mut report = ScenarioReport::default();
+    let mut t = expressive_core::telemetry::NoopTelemetry;
 
     for action in actions {
         if let Some(event) = action.event {
             report.events_in += 1;
             println!("Input: {event:?}");
-            match instrument.process_event(event, &mut out_buffer) {
+            match instrument.process_event(event, &mut out_buffer, &mut t) {
                 Ok(count) => {
                     for event_out in out_buffer.iter().take(count) {
                         report.events_out += 1;
