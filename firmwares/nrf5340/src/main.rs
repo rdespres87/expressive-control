@@ -162,6 +162,14 @@ async fn main(spawner: Spawner) {
     };
     let mut out_buffer = [dummy_event; 16];
 
+    struct DefmtTelemetry;
+    impl expressive_core::telemetry::TelemetryHandler for DefmtTelemetry {
+        fn handle(&mut self, event: expressive_core::telemetry::TelemetryEvent) {
+            defmt::trace!("[Telemetry] {:?}", defmt::Debug2Format(&event));
+        }
+    }
+    let mut telemetry = DefmtTelemetry;
+
     #[cfg(feature = "hil")]
     {
         // Initialize UART for HIL Injection
@@ -184,7 +192,9 @@ async fn main(spawner: Spawner) {
                     postcard::accumulator::FeedResult::DeserError(_) => defmt::error!("DeserError"),
                     postcard::accumulator::FeedResult::Success { data, .. } => {
                         defmt::info!("Received HIL: {:?}", defmt::Debug2Format(&data));
-                        if let Ok(count) = instrument.process_event(data, &mut out_buffer) {
+                        if let Ok(count) =
+                            instrument.process_event(data, &mut out_buffer, &mut telemetry)
+                        {
                             for event_out in out_buffer.iter().take(count) {
                                 let midi_msg = event_out.to_midi();
                                 defmt::info!("MIDI Out: {:?}", midi_msg.as_slice());
@@ -215,7 +225,9 @@ async fn main(spawner: Spawner) {
                 expressive_core::SensorReader::poll_events(&mut sensor, &mut sensor_buffer)
             {
                 for event in sensor_buffer.iter().take(status.count) {
-                    if let Ok(count) = instrument.process_event(*event, &mut out_buffer) {
+                    if let Ok(count) =
+                        instrument.process_event(*event, &mut out_buffer, &mut telemetry)
+                    {
                         for event_out in out_buffer.iter().take(count) {
                             let midi_msg = event_out.to_midi();
                             defmt::info!("MIDI Out: {:?}", midi_msg.as_slice());
