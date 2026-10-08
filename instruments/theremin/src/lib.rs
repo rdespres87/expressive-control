@@ -52,7 +52,7 @@ impl Default for TofThereminProcessor {
             root_note: RootNote::C,
             scale: Scale::Chromatic,
             base_octave: 4,
-            octave_range: 3,
+            octave_range: 2,
             pitch_quantization: 50,
             filter_speed: FilterSpeed::Fast,
         }
@@ -61,23 +61,45 @@ impl Default for TofThereminProcessor {
 
 impl TofThereminProcessor {
     fn map_distance_to_note_and_bend(&self, z: u16) -> (U7, U14) {
+        let root_offset = match self.root_note {
+            RootNote::C => 0,
+            RootNote::Cs => 1,
+            RootNote::D => 2,
+            RootNote::Ds => 3,
+            RootNote::E => 4,
+            RootNote::F => 5,
+            RootNote::Fs => 6,
+            RootNote::G => 7,
+            RootNote::Gs => 8,
+            RootNote::A => 9,
+            RootNote::As => 10,
+            RootNote::B => 11,
+        };
+        // Standard MIDI: C4 is 60. Octave 4 -> (4+1)*12 = 60.
+        let base_midi_note = (self.base_octave + 1) * 12 + root_offset;
+        let total_semitones = self.octave_range * 12;
+
         if z >= self.max_distance_mm {
-            return (U7::new(60), U14::new(8192));
+            return (U7::new(base_midi_note.clamp(0, 127) as u8), U14::new(8192));
         }
         if z <= self.min_distance_mm {
-            return (U7::new(84), U14::new(8192));
+            return (
+                U7::new((base_midi_note + total_semitones).clamp(0, 127) as u8),
+                U14::new(8192),
+            );
         }
 
-        let mm_from_c4 = (self.max_distance_mm - z) as f32;
-        let semitones = mm_from_c4 / 40.83333; // 980mm / 24 semitones
+        let mm_from_base = (self.max_distance_mm - z) as f32;
+        let mm_per_semitone =
+            (self.max_distance_mm - self.min_distance_mm) as f32 / total_semitones as f32;
+        let semitones = mm_from_base / mm_per_semitone;
 
         let rounded_semitones = (semitones + 0.5) as i32;
-        let midi_note = 60 + rounded_semitones;
+        let midi_note = base_midi_note + rounded_semitones;
 
         let remainder = semitones - rounded_semitones as f32;
 
         // Pitchbend is 8192 at center, +/- 8191 for +/- 2 semitones.
-        // 1 semitone = 4095.5 units.
         let bend = 8192.0 + (remainder * 4095.5);
         let bend = bend.clamp(0.0, 16383.0);
 

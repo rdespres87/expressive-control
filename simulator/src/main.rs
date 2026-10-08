@@ -157,11 +157,15 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
 
     let tx_oct = config_tx.clone();
     ui_master.on_octave_changed(move |octave| {
+        println!("Master UI [Touch]: Octave changed to {}", octave);
+        println!("UART TX (Master -> Slave): SetOctave({})", octave);
         let _ = tx_oct.send(ConfigMessage::SetBaseOctave(octave));
     });
 
     let tx_scale = config_tx.clone();
     ui_master.on_scale_changed(move |scale| {
+        println!("Master UI [Touch]: Scale changed to {}", scale);
+        println!("UART TX (Master -> Slave): SetScale({})", scale);
         let s = match scale.as_str() {
             "Chromatic" => Scale::Chromatic,
             "Major" => Scale::Major,
@@ -174,6 +178,8 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
 
     let tx_root = config_tx.clone();
     ui_master.on_root_changed(move |root| {
+        println!("Master UI [Touch]: Root Note changed to {}", root);
+        println!("UART TX (Master -> Slave): SetRootNote({})", root);
         let r = match root.as_str() {
             "C" => RootNote::C,
             "C#" => RootNote::Cs,
@@ -194,6 +200,8 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
 
     let tx_range = config_tx.clone();
     ui_master.on_range_changed(move |r| {
+        println!("Master UI [Touch]: Octave Range changed to {}", r);
+        println!("UART TX (Master -> Slave): SetOctaveRange({})", r);
         let _ = tx_range.send(ConfigMessage::SetOctaveRange(r));
     });
 
