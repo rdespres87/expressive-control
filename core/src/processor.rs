@@ -16,7 +16,51 @@ pub enum ProcessorError {
     BufferTooSmall,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RootNote {
+    C,
+    Cs,
+    D,
+    Ds,
+    E,
+    F,
+    Fs,
+    G,
+    Gs,
+    A,
+    As,
+    B,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scale {
+    Chromatic,
+    Major,
+    Minor,
+    Pentatonic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilterSpeed {
+    Slow,
+    Med,
+    Fast,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigMessage {
+    SetRootNote(RootNote),
+    SetScale(Scale),
+    SetBaseOctave(i32),
+    SetOctaveRange(i32),
+    SetPitchQuantization(i32),
+    SetFilterSpeed(FilterSpeed),
+}
+
 pub trait ControlProcessor {
+    /// Handle a configuration change (e.g. from a Master UI or via UART)
+    fn handle_config(&mut self, _config: ConfigMessage) {}
+
     /// Processes a single sensor event.
     /// Writes the resulting MPE events into `out_buffer`.
     /// Returns the number of events written to avoid dynamic allocation.

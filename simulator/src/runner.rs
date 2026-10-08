@@ -33,6 +33,7 @@ pub fn run_scenario<C, T, F, A, W>(
     mut on_event: F,
     mut on_action_done: A,
     mut wait: W,
+    config_rx: Option<&std::sync::mpsc::Receiver<expressive_core::processor::ConfigMessage>>,
 ) -> ScenarioReport
 where
     C: ControlProcessor,
@@ -51,6 +52,12 @@ where
     let mut t = expressive_core::telemetry::NoopTelemetry;
 
     for action in actions {
+        if let Some(rx) = config_rx {
+            while let Ok(msg) = rx.try_recv() {
+                instrument.handle_config(msg);
+            }
+        }
+
         if let Some(event) = action.event {
             report.events_in += 1;
             println!("Input: {event:?}");
@@ -284,6 +291,7 @@ mod tests {
             |e| ui_events.push(*e),
             |_| {}, // ignore action done
             |d| waits.push(d),
+            None,
         );
 
         // Volume event generates nothing (!is_playing).
@@ -340,6 +348,7 @@ mod tests {
             |_| ui_calls += 1,
             |_| {},
             |_| {},
+            None,
         );
 
         // Volume event generates nothing (!is_playing).
@@ -373,6 +382,7 @@ mod tests {
             |_| {},
             |_| {},
             |_| {},
+            None,
         );
 
         assert_eq!(report.events_in, 16);
@@ -385,7 +395,15 @@ mod tests {
     fn empty_scenario_does_nothing() {
         let mut processor = TofThereminProcessor::default();
         let mut transport = RecordingTransport::default();
-        let report = run_scenario(&[], &mut processor, &mut transport, |_| {}, |_| {}, |_| {});
+        let report = run_scenario(
+            &[],
+            &mut processor,
+            &mut transport,
+            |_| {},
+            |_| {},
+            |_| {},
+            None,
+        );
         assert_eq!(report, ScenarioReport::default());
         assert!(transport.sent.is_empty());
     }

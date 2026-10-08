@@ -8,7 +8,9 @@ use std::process::ExitCode;
 use std::thread::sleep;
 use std::time::Duration;
 
-use expressive_core::processor::{ControlProcessor, MpeInstrument};
+use expressive_core::processor::{
+    ConfigMessage, ControlProcessor, FilterSpeed, MpeInstrument, RootNote, Scale,
+};
 use expressive_core::{MidiTransport, TransportError};
 #[cfg(unix)]
 use midir::os::unix::VirtualOutput;
@@ -91,6 +93,7 @@ fn start_and_run<C, A>(
     instrument: &mut C,
     transport: &mut MidirTransport,
     on_action_done: A,
+    config_rx: Option<&std::sync::mpsc::Receiver<ConfigMessage>>,
 ) -> ScenarioReport
 where
     C: ControlProcessor,
@@ -108,6 +111,7 @@ where
         |_| {},
         on_action_done,
         sleep,
+        config_rx,
     )
 }
 
@@ -137,7 +141,7 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
     if !is_theremin {
         println!("🎹 Using MPE Keyboard Logic");
         let mut instrument = MpeInstrument::default();
-        let report = start_and_run(&scenario, &mut instrument, &mut transport, |_| {});
+        let report = start_and_run(&scenario, &mut instrument, &mut transport, |_| {}, None);
         println!("✅ PC Simulation complete: {report:?}");
         return Ok(());
     }
@@ -149,37 +153,84 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
     let ui_slave_handle = ui_slave.as_weak();
     // ui_master_handle could be used later
 
-    // Hook up Master UI callbacks (Simulating UART to Slave and Processor)
-    let ui_slave_weak = ui_slave.as_weak();
+    let (config_tx, config_rx) = std::sync::mpsc::channel();
+
+    let tx_oct = config_tx.clone();
     ui_master.on_octave_changed(move |octave| {
-        println!("Master UI [Touch]: Octave changed to {}", octave);
-        println!("UART TX (Master -> Slave): SetOctave({})", octave);
-        if let Some(slave) = ui_slave_weak.upgrade() {
-            slave.set_octave(octave.to_string().into());
-        }
+        let _ = tx_oct.send(ConfigMessage::SetBaseOctave(octave));
     });
 
-    let ui_slave_weak2 = ui_slave.as_weak();
+    let tx_scale = config_tx.clone();
     ui_master.on_scale_changed(move |scale| {
-        println!("Master UI [Touch]: Scale changed to {}", scale);
-        println!("UART TX (Master -> Slave): SetScale({})", scale);
-        if let Some(_slave) = ui_slave_weak2.upgrade() {
-            // we could update scale on slave if it had a property
-        }
+        let s = match scale.as_str() {
+            "Chromatic" => Scale::Chromatic,
+            "Major" => Scale::Major,
+            "Minor" => Scale::Minor,
+            "Penta" => Scale::Pentatonic,
+            _ => Scale::Chromatic,
+        };
+        let _ = tx_scale.send(ConfigMessage::SetScale(s));
+    });
+
+    let tx_root = config_tx.clone();
+    ui_master.on_root_changed(move |root| {
+        let r = match root.as_str() {
+            "C" => RootNote::C,
+            "C#" => RootNote::Cs,
+            "D" => RootNote::D,
+            "D#" => RootNote::Ds,
+            "E" => RootNote::E,
+            "F" => RootNote::F,
+            "F#" => RootNote::Fs,
+            "G" => RootNote::G,
+            "G#" => RootNote::Gs,
+            "A" => RootNote::A,
+            "A#" => RootNote::As,
+            "B" => RootNote::B,
+            _ => RootNote::C,
+        };
+        let _ = tx_root.send(ConfigMessage::SetRootNote(r));
+    });
+
+    let tx_range = config_tx.clone();
+    ui_master.on_range_changed(move |r| {
+        let _ = tx_range.send(ConfigMessage::SetOctaveRange(r));
+    });
+
+    let tx_quant = config_tx.clone();
+    ui_master.on_quantization_changed(move |q| {
+        let _ = tx_quant.send(ConfigMessage::SetPitchQuantization(q));
+    });
+
+    let tx_filter = config_tx.clone();
+    ui_master.on_filter_changed(move |f| {
+        let s = match f.as_str() {
+            "Slow" => FilterSpeed::Slow,
+            "Med" => FilterSpeed::Med,
+            "Fast" => FilterSpeed::Fast,
+            _ => FilterSpeed::Fast,
+        };
+        let _ = tx_filter.send(ConfigMessage::SetFilterSpeed(s));
     });
 
     // The scenario runs in the background and pushes display snapshots into the Slint event loop.
     std::thread::spawn(move || {
         let mut processor = TofThereminProcessor::default();
-        let report = start_and_run(&scenario, &mut processor, &mut transport, |proc| {
-            let display = ThereminDisplay::from_processor(proc);
-            let snapshot = display.snapshot();
-            let update =
-                ui_slave_handle.upgrade_in_event_loop(move |ui| apply_snapshot(&ui, &snapshot));
-            if let Err(e) = update {
-                eprintln!("  -> UI update failed: {e}");
-            }
-        });
+        let report = start_and_run(
+            &scenario,
+            &mut processor,
+            &mut transport,
+            |proc| {
+                let display = ThereminDisplay::from_processor(proc);
+                let snapshot = display.snapshot();
+                let update =
+                    ui_slave_handle.upgrade_in_event_loop(move |ui| apply_snapshot(&ui, &snapshot));
+                if let Err(e) = update {
+                    eprintln!("  -> UI update failed: {e}");
+                }
+            },
+            Some(&config_rx),
+        );
         println!("✅ PC Simulation complete: {report:?}");
     });
 

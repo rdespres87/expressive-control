@@ -2,7 +2,7 @@
 
 use expressive_core::{
     Channel, InstrumentEvent, SensorEvent, U7, U14,
-    processor::{ControlProcessor, ProcessorError},
+    processor::{ConfigMessage, ControlProcessor, FilterSpeed, ProcessorError, RootNote, Scale},
 };
 
 pub struct TofThereminProcessor {
@@ -14,6 +14,14 @@ pub struct TofThereminProcessor {
     note_on_sent: bool, // True if a NoteOn was sent (volume > 0)
     current_volume: U7,
     current_pitch_bend: U14,
+
+    // Config state
+    pub root_note: RootNote,
+    pub scale: Scale,
+    pub base_octave: i32,
+    pub octave_range: i32,
+    pub pitch_quantization: i32,
+    pub filter_speed: FilterSpeed,
 }
 
 impl TofThereminProcessor {
@@ -41,6 +49,12 @@ impl Default for TofThereminProcessor {
             note_on_sent: false,
             current_volume: U7::new(0),
             current_pitch_bend: U14::new(8192), // Center pitch bend
+            root_note: RootNote::C,
+            scale: Scale::Chromatic,
+            base_octave: 4,
+            octave_range: 3,
+            pitch_quantization: 50,
+            filter_speed: FilterSpeed::Fast,
         }
     }
 }
@@ -88,6 +102,17 @@ impl TofThereminProcessor {
 }
 
 impl ControlProcessor for TofThereminProcessor {
+    fn handle_config(&mut self, config: ConfigMessage) {
+        match config {
+            ConfigMessage::SetRootNote(r) => self.root_note = r,
+            ConfigMessage::SetScale(s) => self.scale = s,
+            ConfigMessage::SetBaseOctave(o) => self.base_octave = o,
+            ConfigMessage::SetOctaveRange(r) => self.octave_range = r,
+            ConfigMessage::SetPitchQuantization(q) => self.pitch_quantization = q,
+            ConfigMessage::SetFilterSpeed(s) => self.filter_speed = s,
+        }
+    }
+
     fn process_event<T: expressive_core::telemetry::TelemetryHandler>(
         &mut self,
         event: SensorEvent,

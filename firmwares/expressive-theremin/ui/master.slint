@@ -4,12 +4,12 @@ export component MasterWindow inherits Window {
     background: #0c0b0f;
     title: "Theremin Config (Master)";
 
-    in property <string> current_root: "C";
-    in property <string> current_scale: "Chromatic";
-    in property <int> current_octave: 4;
-    in property <int> octave_range: 3;
-    in property <int> pitch_quantization: 50; // 0, 25, 50, 75, 100
-    in property <string> filter_speed: "Fast";
+    in-out property <string> current_root: "C";
+    in-out property <string> current_scale: "Chromatic";
+    in-out property <int> current_octave: 4;
+    in-out property <int> octave_range: 3;
+    in-out property <int> pitch_quantization: 50; // 0, 25, 50, 75, 100
+    in-out property <string> filter_speed: "Fast";
 
     // Callbacks to simulate touching the UI
     callback root_changed(string);
@@ -91,7 +91,10 @@ export component MasterWindow inherits Window {
                                 background: root.current_scale == scale ? accent : #333340;
                                 Text { text: scale; color: root.current_scale == scale ? #000000 : text_color; font-size: 20px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
                             }
-                            clicked => { root.scale_changed(scale); }
+                            clicked => { 
+                                root.current_scale = scale;
+                                root.scale_changed(scale); 
+                            }
                         }
                     }
                 }
@@ -119,7 +122,12 @@ export component MasterWindow inherits Window {
                                 width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
                                 Text { text: "-"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
                             }
-                            clicked => { if (root.current_octave > -1) { root.octave_changed(root.current_octave - 1); } }
+                            clicked => { 
+                                if (root.current_octave > -1) { 
+                                    root.current_octave -= 1;
+                                    root.octave_changed(root.current_octave); 
+                                } 
+                            }
                         }
                         Text { text: root.current_octave; font-size: 40px; font-weight: 800; color: text_color; horizontal-alignment: center; vertical-alignment: center; width: 40px; }
                         TouchArea {
@@ -128,7 +136,12 @@ export component MasterWindow inherits Window {
                                 width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
                                 Text { text: "+"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
                             }
-                            clicked => { if (root.current_octave < 9) { root.octave_changed(root.current_octave + 1); } }
+                            clicked => { 
+                                if (root.current_octave < 9) { 
+                                    root.current_octave += 1;
+                                    root.octave_changed(root.current_octave); 
+                                } 
+                            }
                         }
                     }
                 }
@@ -150,7 +163,12 @@ export component MasterWindow inherits Window {
                                 width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
                                 Text { text: "-"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
                             }
-                            clicked => { if (root.octave_range > 1) { root.range_changed(root.octave_range - 1); } }
+                            clicked => { 
+                                if (root.octave_range > 1) { 
+                                    root.octave_range -= 1;
+                                    root.range_changed(root.octave_range); 
+                                } 
+                            }
                         }
                         Text { text: root.octave_range; font-size: 40px; font-weight: 800; color: text_color; horizontal-alignment: center; vertical-alignment: center; width: 40px; }
                         TouchArea {
@@ -159,7 +177,12 @@ export component MasterWindow inherits Window {
                                 width: 100%; height: 100%; border-radius: 25px; background: parent.pressed ? accent.darker(0.5) : #333340;
                                 Text { text: "+"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
                             }
-                            clicked => { if (root.octave_range < 7) { root.range_changed(root.octave_range + 1); } }
+                            clicked => { 
+                                if (root.octave_range < 7) { 
+                                    root.octave_range += 1;
+                                    root.range_changed(root.octave_range); 
+                                } 
+                            }
                         }
                     }
                 }
@@ -187,7 +210,10 @@ export component MasterWindow inherits Window {
                                 background: root.pitch_quantization == val ? accent : #333340;
                                 Text { text: val + "%"; color: root.pitch_quantization == val ? #000000 : text_color; font-size: 20px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
                             }
-                            clicked => { root.quantization_changed(val); }
+                            clicked => { 
+                                root.pitch_quantization = val;
+                                root.quantization_changed(val); 
+                            }
                         }
                     }
                 }
@@ -209,7 +235,10 @@ export component MasterWindow inherits Window {
                                 background: root.filter_speed == speed ? accent : #333340;
                                 Text { text: speed; color: root.filter_speed == speed ? #000000 : text_color; font-size: 20px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
                             }
-                            clicked => { root.filter_changed(speed); }
+                            clicked => { 
+                                root.filter_speed = speed;
+                                root.filter_changed(speed); 
+                            }
                         }
                     }
                 }
