@@ -72,6 +72,18 @@ fn apply_snapshot(ui: &SlaveWindow, snapshot: &DisplaySnapshot) {
     ui.set_octave(octave.into());
     ui.set_cents(snapshot.pitch_cents);
     ui.set_is_active(snapshot.is_playing);
+    ui.set_frequency(snapshot.pitch_hz.as_str().into());
+    ui.set_volume(snapshot.volume_progress);
+
+    // Mock expression differently so it also drops to 0 when muted
+    let expr = if snapshot.volume_progress < 0.05 {
+        0.0
+    } else {
+        (1.0 - snapshot.volume_progress).clamp(0.1, 1.0)
+    };
+    ui.set_expression(expr);
+
+    ui.set_transpose("+0".into()); // Mock for now
 }
 
 fn start_and_run<C, A>(
@@ -131,17 +143,39 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
     }
 
     println!("🎸 Using Theremin Instrument Logic");
-    let ui = SlaveWindow::new().map_err(SimError::Ui)?;
-    let ui_handle = ui.as_weak();
+    let ui_slave = SlaveWindow::new().map_err(SimError::Ui)?;
+    let ui_master = MasterWindow::new().map_err(SimError::Ui)?;
 
-    // The UI owns the main thread; the scenario runs in the background and pushes
-    // display snapshots into the Slint event loop.
+    let ui_slave_handle = ui_slave.as_weak();
+    // ui_master_handle could be used later
+
+    // Hook up Master UI callbacks (Simulating UART to Slave and Processor)
+    let ui_slave_weak = ui_slave.as_weak();
+    ui_master.on_octave_changed(move |octave| {
+        println!("Master UI [Touch]: Octave changed to {}", octave);
+        println!("UART TX (Master -> Slave): SetOctave({})", octave);
+        if let Some(slave) = ui_slave_weak.upgrade() {
+            slave.set_octave(octave.to_string().into());
+        }
+    });
+
+    let ui_slave_weak2 = ui_slave.as_weak();
+    ui_master.on_scale_changed(move |scale| {
+        println!("Master UI [Touch]: Scale changed to {}", scale);
+        println!("UART TX (Master -> Slave): SetScale({})", scale);
+        if let Some(_slave) = ui_slave_weak2.upgrade() {
+            // we could update scale on slave if it had a property
+        }
+    });
+
+    // The scenario runs in the background and pushes display snapshots into the Slint event loop.
     std::thread::spawn(move || {
         let mut processor = TofThereminProcessor::default();
         let report = start_and_run(&scenario, &mut processor, &mut transport, |proc| {
             let display = ThereminDisplay::from_processor(proc);
             let snapshot = display.snapshot();
-            let update = ui_handle.upgrade_in_event_loop(move |ui| apply_snapshot(&ui, &snapshot));
+            let update =
+                ui_slave_handle.upgrade_in_event_loop(move |ui| apply_snapshot(&ui, &snapshot));
             if let Err(e) = update {
                 eprintln!("  -> UI update failed: {e}");
             }
@@ -149,7 +183,9 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
         println!("✅ PC Simulation complete: {report:?}");
     });
 
-    ui.run().map_err(SimError::Ui)
+    ui_slave.show().map_err(SimError::Ui)?;
+    ui_master.show().map_err(SimError::Ui)?;
+    slint::run_event_loop().map_err(SimError::Ui)
 }
 
 fn run(args: CliArgs) -> Result<(), SimError> {

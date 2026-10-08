@@ -9,84 +9,142 @@ export component SlaveWindow inherits Window {
     in property <string> octave: "4";
     in property <float> cents: 0.0; // -50.0 to +50.0
     in property <bool> is_active: false;
-    
+    // New Data
+    in property <float> volume: 0.0; // 0.0 to 1.0
+    in property <float> expression: 0.0; // 0.0 to 1.0
+    in property <string> frequency: "-- Hz";
+    in property <string> transpose: "+0";
+
     // UI Theme
     property <color> accent_color: #00f0ff; // Neon cyan
     property <color> perfect_color: #00ff88; // Green for perfect pitch
     property <color> warning_color: #ffaa00; // Orange for slightly off
     property <color> danger_color: #ff3344; // Red for very off
 
-    // Dynamic color logic: Green if within 5 cents, Orange if <= 15, Red beyond
-    property <color> tune_color: !root.is_active ? #333340 : (abs(root.cents) <= 5.0 ? perfect_color : (abs(root.cents) <= 15.0 ? warning_color : danger_color));
+    // Dynamic color logic: Green if within 10 cents, Orange if <= 20, Red beyond
+    property <color> tune_color: !root.is_active ? #333340 : (abs(root.cents) <= 10.0 ? perfect_color : (abs(root.cents) <= 20.0 ? warning_color : danger_color));
 
-    VerticalLayout {
-        alignment: center;
-        spacing: 10px;
+    HorizontalLayout {
+        padding: 20px;
+        spacing: 20px;
         
-        // TOP: Strobe / LED segment gauge
-        gauge := Rectangle {
-            height: 270px; // Occupe plus de la moitié de l'écran (480px)
-            width: 100%;
-            
-            property <float> cx: self.width / 1px / 2.0;
-            property <float> cy: 260.0; // Centre de rotation abaissé
-            
-            // 101 radial LED segments (1 tick = 1 cent de résolution !)
-            for i in 101: Rectangle {
-                property <angle> a: -90deg + i * 1.8deg; // From -90 (left) to +90 (right), 180deg / 100 = 1.8deg
-                property <float> tick_cents: -50.0 + i * 1.0; // From -50 to +50, 100 cents / 100 = 1.0 cent
-                
-                // Radius of the outer edge of the LED (Agrandissement massif)
-                property <float> outer_r: 240.0;
-                
-                // Container height is exactly twice the radius so it rotates perfectly around cy
-                width: (i == 50) ? 6px : 3px; // Ticks plus fins car il y en a 101
-                height: outer_r * 2.0 * 1px;
-                x: gauge.cx * 1px - self.width / 2;
-                y: gauge.cy * 1px - self.height / 2;
-                
-                transform-rotation: a;
-                
-                // Lit if it's between center and current cents
-                property <bool> is_lit: root.is_active && (
-                    (root.cents <= -0.5 && tick_cents >= root.cents && tick_cents <= 0.0) ||
-                    (root.cents >= 0.5 && tick_cents <= root.cents && tick_cents >= 0.0) ||
-                    (abs(root.cents) < 0.5 && i == 50)
-                );
-
-                // The actual visible LED
+        // LEFT: Volume Bargraph (CC7)
+        VerticalLayout {
+            width: 40px;
+            alignment: center;
+            spacing: 15px; 
+            HorizontalLayout {
+                alignment: center;
                 Rectangle {
-                    width: 100%;
-                    height: (i == 50) ? 55px : 30px; // Ticks plus longs
-                    y: 0px; // Placed at the very top of the container
-                    background: parent.is_lit ? root.tune_color : #1a1a24;
-                    border-radius: self.width / 2;
-                    animate background { duration: 80ms; }
+                    width: 20px; 
+                    height: 300px; 
+                    background: #1a1a24;
+                    border-radius: 10px;
+                    HorizontalLayout { alignment: center; 
+                        Rectangle {
+                            width: 100%;
+                            height: parent.height * root.volume;
+                            y: parent.height - self.height;
+                            background: root.accent_color;
+                            border-radius: 10px;
+                            animate height { duration: 50ms; }
+                        }
+                    }
                 }
             }
+            Text { text: "VOL"; color: #666670; font-size: 14px; horizontal-alignment: center; font-weight: 700; }
         }
-        
-        // MIDDLE: Note Display
-        HorizontalLayout {
+
+        VerticalLayout {
             alignment: center;
-            spacing: 8px;
+            spacing: 10px;
+            width: 600px;
             
+            // TOP: Strobe / LED segment gauge
+            gauge := Rectangle {
+                height: 250px; 
+                width: 100%;
+                
+                property <float> cx: self.width / 1px / 2.0;
+                property <float> cy: 260.0; // Lower center to make arc bigger
+                
+                for i in 101: Rectangle {
+                    property <angle> a: -90deg + i * 1.8deg; 
+                    property <float> tick_cents: -50.0 + i * 1.0; 
+                    
+                    property <float> outer_r: 250.0; // Increase arc radius
+                    
+                    // Revert cursor width
+                    width: (i == 50) ? 6px : 3px; 
+                    height: outer_r * 2.0 * 1px;
+                    x: gauge.cx * 1px - self.width / 2;
+                    y: gauge.cy * 1px - self.height / 2;
+                    
+                    transform-rotation: a;
+                    
+                    property <bool> is_lit: root.is_active && (
+                        (root.cents <= -0.5 && tick_cents >= root.cents && tick_cents <= 0.0) ||
+                        (root.cents >= 0.5 && tick_cents <= root.cents && tick_cents >= 0.0) ||
+                        (abs(root.cents) < 0.5 && i == 50)
+                    );
+
+                    Rectangle {
+                        width: 100%;
+                        // Make the cursor tick longer
+                        height: (i == 50) ? 60px : 25px; 
+                        y: 0px; 
+                        background: parent.is_lit ? root.tune_color : #1a1a24;
+                        border-radius: self.width / 2;
+                        animate background { duration: 80ms; }
+                    }
+                }
+            }
+            
+            // MIDDLE: Note Display (A4)
             Text {
-                text: root.is_active ? root.note_name : "--";
+                text: root.is_active ? root.note_name + root.octave : "--";
                 font-size: 140px;
                 font-weight: 900;
                 color: root.is_active ? #ffffff : #333340;
                 letter-spacing: -2px;
+                horizontal-alignment: center;
                 animate color { duration: 200ms; }
             }
             
-            Text {
-                text: root.is_active ? root.octave : "";
-                font-size: 60px;
-                font-weight: 700;
-                color: root.is_active ? root.accent_color : transparent;
-                vertical-alignment: bottom;
+            // BOTTOM: Details (Freq / Transpose)
+            HorizontalLayout {
+                alignment: center;
+                spacing: 40px;
+                Text { text: root.is_active ? root.frequency : "-- Hz"; font-size: 24px; color: #888899; font-weight: 600; }
+                Text { text: "TRANSPOSE: " + root.transpose; font-size: 24px; color: #888899; font-weight: 600; }
             }
+        }
+
+        // RIGHT: Expression Bargraph (CC11)
+        VerticalLayout {
+            width: 40px;
+            alignment: center;
+            spacing: 15px; 
+            HorizontalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 20px; 
+                    height: 300px; 
+                    background: #1a1a24;
+                    border-radius: 10px;
+                    HorizontalLayout { alignment: center;
+                        Rectangle {
+                            width: 100%;
+                            height: parent.height * root.expression;
+                            y: parent.height - self.height; 
+                            background: #ff0077; 
+                            border-radius: 10px;
+                            animate height { duration: 50ms; }
+                        }
+                    }
+                }
+            }
+            Text { text: "EXP"; color: #666670; font-size: 14px; horizontal-alignment: center; font-weight: 700; }
         }
     }
 }

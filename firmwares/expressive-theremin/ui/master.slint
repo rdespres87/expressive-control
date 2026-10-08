@@ -1,0 +1,138 @@
+export component MasterWindow inherits Window {
+    width: 800px;
+    height: 480px;
+    background: #0c0b0f;
+    title: "Theremin Config (Master)";
+
+    in property <string> current_scale: "Chromatic";
+    in property <int> current_octave: 4;
+    in property <int> midi_channel: 1;
+
+    // Callbacks to simulate touching the UI
+    callback scale_changed(string);
+    callback octave_changed(int);
+    callback channel_changed(int);
+
+    // Theme
+    property <color> accent: #00f0ff;
+    property <color> text_color: #ffffff;
+    property <color> dim_text: #666670;
+    property <color> panel_bg: #1a1a24;
+
+    VerticalLayout {
+        padding: 30px;
+        spacing: 20px;
+
+        // Header
+        Text {
+            text: "MASTER CONFIGURATION";
+            font-size: 32px;
+            font-weight: 900;
+            color: accent;
+            letter-spacing: 2px;
+            horizontal-alignment: center;
+        }
+
+        Rectangle {
+            height: 2px;
+            background: accent;
+            width: 100%;
+        }
+
+        HorizontalLayout {
+            spacing: 20px;
+
+            // Octave Panel
+            Rectangle {
+                background: panel_bg;
+                border-radius: 15px;
+                width: 30%;
+
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 15px;
+                    alignment: center;
+
+                    Text { text: "OCTAVE"; color: dim_text; font-size: 20px; font-weight: 700; horizontal-alignment: center; }
+                    
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 20px;
+                        
+                        TouchArea {
+                            width: 60px; height: 60px;
+                            Rectangle {
+                                width: 100%; height: 100%; border-radius: 30px;
+                                background: parent.pressed ? accent.darker(0.5) : #333340;
+                                Text { text: "-"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            clicked => { if (root.current_octave > -1) { root.octave_changed(root.current_octave - 1); } }
+                        }
+                        
+                        Text {
+                            text: root.current_octave;
+                            font-size: 60px;
+                            font-weight: 800;
+                            color: text_color;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        
+                        TouchArea {
+                            width: 60px; height: 60px;
+                            Rectangle {
+                                width: 100%; height: 100%; border-radius: 30px;
+                                background: parent.pressed ? accent.darker(0.5) : #333340;
+                                Text { text: "+"; color: text_color; font-size: 40px; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            clicked => { if (root.current_octave < 9) { root.octave_changed(root.current_octave + 1); } }
+                        }
+                    }
+                }
+            }
+
+            // Scale Panel
+            Rectangle {
+                background: panel_bg;
+                border-radius: 15px;
+                width: 70%;
+
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 15px;
+
+                    Text { text: "SCALE"; color: dim_text; font-size: 20px; font-weight: 700; horizontal-alignment: center; }
+                    
+                    HorizontalLayout {
+                        spacing: 10px;
+                        // For simplicity in the mockup, we hardcode 3 scales. In a real app we might use a ListView.
+                        TouchArea {
+                            Rectangle {
+                                border-radius: 10px;
+                                background: root.current_scale == "Chromatic" ? accent : #333340;
+                                Text { text: "Chromatic"; color: root.current_scale == "Chromatic" ? #000000 : text_color; font-size: 24px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            clicked => { root.scale_changed("Chromatic"); }
+                        }
+                        TouchArea {
+                            Rectangle {
+                                border-radius: 10px;
+                                background: root.current_scale == "Major" ? accent : #333340;
+                                Text { text: "Major"; color: root.current_scale == "Major" ? #000000 : text_color; font-size: 24px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            clicked => { root.scale_changed("Major"); }
+                        }
+                        TouchArea {
+                            Rectangle {
+                                border-radius: 10px;
+                                background: root.current_scale == "Minor" ? accent : #333340;
+                                Text { text: "Minor"; color: root.current_scale == "Minor" ? #000000 : text_color; font-size: 24px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            clicked => { root.scale_changed("Minor"); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

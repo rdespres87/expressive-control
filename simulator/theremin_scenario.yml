@@ -27,10 +27,14 @@ actions:
   # Fade in volume to play "Some"
   - event: !Position3D { id: 1, x: 0, y: 0, z: 500 }
   - wait_ms: 100
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 250 }
+  - wait_ms: 100
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 150 } # ~70% volume
+  - wait_ms: 600
+
+  # Drop volume slightly before glissando
   - event: !Position3D { id: 1, x: 0, y: 0, z: 200 }
   - wait_ms: 100
-  - event: !Position3D { id: 1, x: 0, y: 0, z: 20 }
-  - wait_ms: 600
 
   # Glissando up to "where" (C5)
   - event: !Position3D { id: 0, x: 0, y: 0, z: 900 }
@@ -42,21 +46,32 @@ actions:
   - event: !Position3D { id: 0, x: 0, y: 0, z: 600 }
   - wait_ms: 80
   
+  # Swell volume up on "where"
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 120 }
+  - wait_ms: 100
+
   # -------------------------
-  # "where" (C5) + Vibrato
+  # "where" (C5) + Vibrato and Volume Nuance
   # -------------------------
   - event: !Position3D { id: 0, x: 0, y: 0, z: 510 }
-  - wait_ms: 400
+  - wait_ms: 200
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 180 } # Drop volume a bit
+  - wait_ms: 200
   - event: !Position3D { id: 0, x: 0, y: 0, z: 505 }
   - wait_ms: 100
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 250 } # Drop more
   - event: !Position3D { id: 0, x: 0, y: 0, z: 515 }
   - wait_ms: 100
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 150 } # Swell
   - event: !Position3D { id: 0, x: 0, y: 0, z: 505 }
   - wait_ms: 100
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 100 } # Almost full
   - event: !Position3D { id: 0, x: 0, y: 0, z: 515 }
   - wait_ms: 100
   - event: !Position3D { id: 0, x: 0, y: 0, z: 510 }
-  - wait_ms: 600
+  - wait_ms: 300
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 280 } # Fade out
+  - wait_ms: 300
 
   # Mute with left hand to separate phrases
   - event: !Position3D { id: 1, x: 0, y: 0, z: 400 }
@@ -77,7 +92,7 @@ actions:
   # Fade in volume to play "O"
   - event: !Position3D { id: 1, x: 0, y: 0, z: 400 }
   - wait_ms: 50
-  - event: !Position3D { id: 1, x: 0, y: 0, z: 20 }
+  - event: !Position3D { id: 1, x: 0, y: 0, z: 150 }
   - wait_ms: 150
   
   # Glissando to "ver" (G4)
