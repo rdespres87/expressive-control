@@ -29,6 +29,7 @@
 - [x] Define UART protocol structure (COBS + Postcard) between Master and Slave
 - [x] Implement UART telemetry transmission in Master (and remove `#![allow(dead_code)]` from `protocol.rs`)
 - [x] Integrate Slint UI interface for the 5" touch display on Slave board (tuner gauge rendering)
+- [ ] Refine Tuner UI: Change cursor color based on cents (+/- 10: Green, +/- 10-20: Orange, >20: Red) and widen the cursor
 - [ ] Add touch interactivity to Slint UI for dynamically configuring octave and scale (`SlaveMessage` via UART)
 - [x] Implement a debug telemetry system for tracing MIDI messages, raw sensor values, and processor state
 - [ ] Implement Composite USB device (MIDI + CDC) via TinyUSB to support Hardware-In-The-Loop (HIL) simulation
