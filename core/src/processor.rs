@@ -55,6 +55,7 @@ pub enum ConfigMessage {
     SetOctaveRange(i32),
     SetPitchQuantization(i32),
     SetFilterSpeed(FilterSpeed),
+    SetPitchBendRange(u8),
 }
 
 pub trait ControlProcessor {

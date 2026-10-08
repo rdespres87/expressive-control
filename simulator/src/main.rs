@@ -205,6 +205,13 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
         let _ = tx_range.send(ConfigMessage::SetOctaveRange(r));
     });
 
+    let tx_pb = config_tx.clone();
+    ui_master.on_pb_range_changed(move |r| {
+        println!("Master UI [Touch]: PB Range changed to {}", r);
+        println!("UART TX (Master -> Slave): SetPitchBendRange({})", r);
+        let _ = tx_pb.send(ConfigMessage::SetPitchBendRange(r as u8));
+    });
+
     let tx_quant = config_tx.clone();
     ui_master.on_quantization_changed(move |q| {
         let _ = tx_quant.send(ConfigMessage::SetPitchQuantization(q));

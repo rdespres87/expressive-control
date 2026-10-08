@@ -43,8 +43,8 @@ impl Default for TofThereminProcessor {
         Self {
             min_distance_mm: 20,
             max_distance_mm: 1000,
-            base_note: U7::new(60),        // Middle C
-            pitch_bend_range_semitones: 2, // Standard +/- 2 semitones
+            base_note: U7::new(60),         // Middle C
+            pitch_bend_range_semitones: 48, // MPE +/- 48 semitones
             is_playing: false,
             note_on_sent: false,
             current_volume: U7::new(0),
@@ -92,15 +92,24 @@ impl TofThereminProcessor {
         let mm_from_base = (self.max_distance_mm - z) as f32;
         let mm_per_semitone =
             (self.max_distance_mm - self.min_distance_mm) as f32 / total_semitones as f32;
-        let semitones = mm_from_base / mm_per_semitone;
+        let exact_semitones = mm_from_base / mm_per_semitone;
 
-        let rounded_semitones = (semitones + 0.5) as i32;
-        let midi_note = base_midi_note + rounded_semitones;
+        let absolute_pitch = base_midi_note as f32 + exact_semitones;
+        let semitones_from_prev = absolute_pitch - self.base_note.as_u8() as f32;
 
-        let remainder = semitones - rounded_semitones as f32;
+        let midi_note = if semitones_from_prev.abs() > self.pitch_bend_range_semitones as f32 {
+            // Note is outside the pitch bend range, we must trigger a new note
+            absolute_pitch.round() as i32
+        } else {
+            // Stay on the same base note and just bend
+            self.base_note.as_u8() as i32
+        };
 
-        // Pitchbend is 8192 at center, +/- 8191 for +/- 2 semitones.
-        let bend = 8192.0 + (remainder * 4095.5);
+        let new_semitones_from_prev = absolute_pitch - midi_note as f32;
+
+        // Pitchbend is 8192 at center, +/- 8191 for +/- PB range.
+        let units_per_semitone = 8191.0 / self.pitch_bend_range_semitones as f32;
+        let bend = 8192.0 + (new_semitones_from_prev * units_per_semitone);
         let bend = bend.clamp(0.0, 16383.0);
 
         (
@@ -132,6 +141,7 @@ impl ControlProcessor for TofThereminProcessor {
             ConfigMessage::SetOctaveRange(r) => self.octave_range = r,
             ConfigMessage::SetPitchQuantization(q) => self.pitch_quantization = q,
             ConfigMessage::SetFilterSpeed(s) => self.filter_speed = s,
+            ConfigMessage::SetPitchBendRange(r) => self.pitch_bend_range_semitones = r,
         }
     }
 
