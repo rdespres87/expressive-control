@@ -59,6 +59,16 @@ cd firmwares/expressive-theremin
 cargo build
 ```
 
+### Debug Telemetry
+The core exposes generic telemetry events (Sensor readings, Voice allocations, Note generation). 
+By default, these are filtered out to avoid console spam. To view them:
+
+- **nRF5340 (defmt)**: Run with the `DEFMT_LOG` environment variable:
+  ```bash
+  DEFMT_LOG=trace cargo run
+  ```
+- **ESP32-S3 (esp-idf)**: The firmware uses the standard `log` crate. Telemetry is emitted at the `Debug` level. Configure your `sdkconfig.defaults` or `RUST_LOG=debug` to view them.
+
 ### Hardware-In-the-Loop (HIL)
 To test the core logic directly on the hardware with deterministic inputs from your PC:
 
