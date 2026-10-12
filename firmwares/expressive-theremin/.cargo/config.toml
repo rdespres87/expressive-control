@@ -3,7 +3,7 @@ target = "xtensa-esp32s3-espidf"
 
 [target.'cfg(target_os = "espidf")']
 linker = "ldproxy"
-runner = "espflash flash --monitor"
+runner = "espflash flash -B 460800 --monitor"
 rustflags = [ "--cfg",  "espidf_time64"]
 
 [unstable]
@@ -13,6 +13,10 @@ build-std = ["std", "panic_abort"]
 MCU = "esp32s3"
 ESP_IDF_VERSION = "v5.2.3"
 ESP_IDF_TOOLS_INSTALL_DIR = "workspace"
+# TinyUSB >= 0.18 derives its FreeRTOS include path (`freertos/`) from `CFG_TUSB_MCU`,
+# which the component only sets as a CMake compile option. esp-idf-sys' bindgen does
+# not see CMake options, so it fails on `FreeRTOS.h` unless we pass it here.
+BINDGEN_EXTRA_CLANG_ARGS_xtensa_esp32s3_espidf = "-DCFG_TUSB_MCU=OPT_MCU_ESP32S3"
 
 # Uncomment this if you have moved the target dir by setting CARGO_TARGET_DIR or similar.
 # Required for now due to embuild limitations.

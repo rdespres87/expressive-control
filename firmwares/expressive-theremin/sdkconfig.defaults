@@ -1,12 +1,29 @@
-# Enable TinyUSB for Native USB-MIDI Support
+# Enable TinyUSB for Native USB-MIDI Support (esp_tinyusb 1.x Kconfig symbols)
 CONFIG_USB_OTG_SUPPORTED=y
-CONFIG_TINYUSB=y
-CONFIG_TINYUSB_MIDI_ENABLED=y
-CONFIG_TINYUSB_MIDI_RX_BUFSIZE=64
-CONFIG_TINYUSB_MIDI_TX_BUFSIZE=64
-CONFIG_ESP_TINYUSB=y
-CONFIG_ESP_TINYUSB_MIDI_ENABLED=y
+CONFIG_TINYUSB_MIDI_COUNT=1
 
 # Force ESP32-S3 native USB to be configured as TinyUSB device (not just serial JTAG)
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=n
 CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+
+# USB Configuration
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=20
+
+# PSRAM - OPI mode (Elecrow CrowPanel 5.0" V3.0 has N4R8 with 8MB OPI PSRAM)
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_SUPPORT=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+# Free PSRAM/SPI0 bandwidth for RGB LCD EDMA by caching instructions and rodata in PSRAM
+CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
+CONFIG_SPIRAM_RODATA=y
+
+# LCD_CAM component (esp_lcd) is always enabled by default in ESP-IDF 5.x
+
+# Main task stack size (32KB to accommodate Slint UI operations, event loops, and drivers)
+CONFIG_MAIN_TASK_STACK_SIZE=32768
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=32768
+
+# Increase FreeRTOS thread-local storage pointers (Rust std + Slint use TLS)
+CONFIG_FREERTOS_THREAD_LOCAL_STORAGE_POINTERS=5
