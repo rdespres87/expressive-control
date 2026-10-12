@@ -7,23 +7,20 @@ IN_PROGRESS
 V0.6 ToF Theremin Prototype (ESP32-S3 + CrowPanel 5.0" Slint UI)
 
 ## Current task
-Intégration du Strobe Tuner sur dalle CrowPanel 5.0" ESP32-S3 validée : double mode normal (télémétrie UART) et test autonome (démo).
+Planification des prochaines étapes matérielles et logicielles : Touchscreen GT911, I2C scanner, étude pinout/expander ADA4886, UI unifiée mono-écran, i18n et stratégie OTA.
 
 ## Last completed
-- Moteur vectoriel subpixel antialiasing (`gauge_renderer.rs`) pour l'ESP32-S3 / Slint MCU sans rotations matérielles :
-  - **Rail de l'arc continu** : épaisseur portée à **20.0 px**.
-  - **101 encoches radiales** : crans réguliers à **5.0 px**, crans majeurs à **7.5 px**, repère 0 cent à **10.0 px**.
-  - **Aiguille pivotante** : tige à **10.0 px**, moyeu à **16.0 px**, tête diamant à **18.0 px**.
-  - Absence totale de rémanence / ghosting grâce au nettoyage systématique de la zone du cadran dans le double buffer PSRAM.
-- Support du double mode dans `main.rs` et `Cargo.toml` :
-  - Mode **Master** (`--features master` ou défaut) : ToF sensors + USB MIDI + UART telemetry.
-  - Mode **Slave normal** (`--features slave`) : écoute UART1 télémétrie et affichage Strobe Tuner en temps réel.
-  - Mode **Slave demo / test** (`--features demo`) : animation autonome pour valider et démontrer la jauge et l'écran sans master.
-- Tous les tests de CI validés (formatage, clippy, unit tests workspace).
-- Documentation mise à jour dans `README.md`.
+- Découpage et commit des 4 étapes atomiques (Driver LCD CrowPanel, Protocole/Simulateur, Rendu vectoriel Strobe Tuner, Architecture multi-modes).
+- Mise à jour détaillée de `docs/agent/TASKS.md` intégrant :
+  - Scanner I2C CrowPanel 5.0"
+  - Driver matériel Touch GT911
+  - Étude pinout CrowPanel & IO Expander ADA4886 (capteurs, encodeur, boutons)
+  - UI unifiée Master/Slave mono-écran
+  - Multi-langue / i18n (FR / EN)
+  - Stratégie de mise à jour firmware
 
 ## Next action
-- Finaliser le commit et synchroniser.
+- Implémenter le scanner I2C sur la carte CrowPanel ou lancer l'étude matérielle du pinout et du GT911.
 
 ## Blockers
 - Aucun.
