@@ -60,44 +60,11 @@ export component SlaveWindow inherits Window {
             spacing: 10px;
             width: 600px;
             
-            // TOP: Strobe / LED segment gauge
+            // TOP: Strobe / LED segment gauge placeholder (vector-rendered directly to framebuffer)
             gauge := Rectangle {
                 height: 250px; 
                 width: 100%;
-                
-                property <float> cx: self.width / 1px / 2.0;
-                property <float> cy: 260.0; // Lower center to make arc bigger
-                
-                for i in 101: Rectangle {
-                    property <angle> a: -90deg + i * 1.8deg; 
-                    property <float> tick_cents: -50.0 + i * 1.0; 
-                    
-                    property <float> outer_r: 250.0; // Increase arc radius
-                    
-                    // Revert cursor width
-                    width: (i == 50) ? 6px : 3px; 
-                    height: outer_r * 2.0 * 1px;
-                    x: gauge.cx * 1px - self.width / 2;
-                    y: gauge.cy * 1px - self.height / 2;
-                    
-                    transform-rotation: a;
-                    
-                    property <bool> is_lit: root.is_active && (
-                        (root.cents <= -0.5 && tick_cents >= root.cents && tick_cents <= 0.0) ||
-                        (root.cents >= 0.5 && tick_cents <= root.cents && tick_cents >= 0.0) ||
-                        (abs(root.cents) < 0.5 && i == 50)
-                    );
-
-                    Rectangle {
-                        width: 100%;
-                        // Make the cursor tick longer
-                        height: (i == 50) ? 60px : 25px; 
-                        y: 0px; 
-                        background: parent.is_lit ? root.tune_color : #1a1a24;
-                        border-radius: self.width / 2;
-                        animate background { duration: 80ms; }
-                    }
-                }
+                background: #0c0b0f;
             }
             
             // MIDDLE: Note Display (A4)
