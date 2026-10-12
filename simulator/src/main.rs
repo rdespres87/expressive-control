@@ -222,7 +222,10 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
                     pitch_bend_range: r as u8,
                 }
             };
-            println!("UART TX (Master -> Slave): SetProcessorMode({:?})", proc_mode);
+            println!(
+                "UART TX (Master -> Slave): SetProcessorMode({:?})",
+                proc_mode
+            );
             let _ = tx_pb.send(ConfigMessage::SetProcessorMode(proc_mode));
         }
     });
@@ -244,7 +247,10 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
                     pitch_bend_range: r as u8,
                 }
             };
-            println!("UART TX (Master -> Slave): SetProcessorMode({:?})", proc_mode);
+            println!(
+                "UART TX (Master -> Slave): SetProcessorMode({:?})",
+                proc_mode
+            );
             let _ = tx_mode.send(ConfigMessage::SetProcessorMode(proc_mode));
         }
     });

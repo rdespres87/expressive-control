@@ -1,14 +1,9 @@
-
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum TunerState {
     Off,
-    On {
-        midi_note: u8,
-        pitch_bend_cents: i8,
-    },
+    On { midi_note: u8, pitch_bend_cents: i8 },
 }
 
 /// MasterMessage: Sent from the Master board (ToF sensors) to the Slave board (Screen)
