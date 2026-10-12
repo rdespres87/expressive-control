@@ -52,11 +52,30 @@ cargo run --features hil
 ```
 
 ### Firmware (ESP32-S3 Theremin)
-*Requires the `esp` rust toolchain (via `espup`).*
+*Requires the `esp` rust toolchain (via `espup`) and `espflash`.*
+
+The ESP32-S3 firmware supports three build modes via Cargo features:
+- **`master`** (default): Dual ToF sensor reading (pitch & volume), USB MIDI output, and UART telemetry streaming.
+- **`slave`**: UART telemetry receiver driving the Elecrow CrowPanel 5.0" RGB LCD with the Slint Strobe Tuner UI.
+- **`demo`**: Autonomous test and demo mode on the CrowPanel 5.0" screen, exercising the subpixel vector gauge (20px arc, 10px needle), notes, and volume/expression bargraphs without requiring a Master board.
 
 ```bash
 cd firmwares/expressive-theremin
-cargo build
+
+# Build for Master mode (default)
+cargo build --release
+
+# Build for Slave mode (normal UART telemetry display)
+cargo build --release --features slave
+
+# Build for Demo / Test mode (autonomous screen & gauge test)
+cargo build --release --features demo
+
+# Flash the firmware (fast 460,800 bauds, recommended for CrowPanel CH340)
+espflash flash -B 460800 --chip esp32s3 --port /dev/cu.usbserial-XXXX target/xtensa-esp32s3-espidf/release/expressive-theremin
+
+# Or flash and automatically open the serial monitor
+espflash flash -B 460800 --monitor --chip esp32s3 --port /dev/cu.usbserial-XXXX target/xtensa-esp32s3-espidf/release/expressive-theremin
 ```
 
 ### Debug Telemetry

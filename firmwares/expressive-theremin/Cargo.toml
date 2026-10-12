@@ -11,9 +11,11 @@ name = "expressive-theremin"
 harness = false # do not use the built-in cargo test harness -> resolve rust-analyzer errors
 
 [features]
+# Base firmware modes
 default = ["master"]
 master = []
 slave = []
+demo = ["slave"]
 
 [dependencies]
 log = "0.4"
@@ -34,12 +36,24 @@ embassy-futures = "0.1.1"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 postcard = { version = "1.0", default-features = false }
 cobs = { version = "0.2.3", default-features = false }
-heapless = "0.8.0"
-slint = { version = "1.8.0", default-features = false, features = ["compat-1-2"] }
+
+# Slint in its MCU flavour. The firmware itself is `std` (ESP-IDF), but Slint's own
+# `std` feature must stay OFF: it enables `fontique` (system fonts) -> `memmap2`,
+# which calls `mmap`/`madvise`, unavailable on `xtensa-esp32s3-espidf`.
+# - `renderer-software`: only renderer usable without a GPU/OpenGL.
+# - `unsafe-single-threaded`: required by Slint when `std` is off; all Slint calls
+#   must therefore stay on the UI thread.
+# - `libm`: float math without Slint's `std`.
+# There is NO `backend-esp32` feature in the Rust crate (it only exists in the C++
+# ESP-IDF component); the display is driven by LovyanGFX via `lgfx-rs`.
+slint = { version = "1.18.1", default-features = false, features = ["compat-1-2", "renderer-software", "unsafe-single-threaded", "libm"] }
+
 
 [build-dependencies]
 embuild = "0.33.5"
-slint-build = "1.8.0"
+slint-build = "1.18.1"
 
 [[package.metadata.esp-idf-sys.extra_components]]
-remote_component = { name = "espressif/esp_tinyusb", version = "*" }
+# Pinned to 1.x: 2.x breaks the headers expected by esp-idf-sys bindings and the
+# `tinyusb_config_t` layout mirrored by `TinyUsbConfig` in src/main.rs.
+remote_component = { name = "espressif/esp_tinyusb", version = "^1.4" }
