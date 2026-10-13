@@ -452,3 +452,15 @@ pub fn flush_to_lcd_with_overlay<F: FnOnce(&mut [Rgb565Pixel], usize, usize)>(ov
         false
     }
 }
+
+/// Dispatch a touchscreen pointer event to the active Slint window.
+pub fn dispatch_pointer_event(event: slint::platform::WindowEvent) {
+    let window = {
+        let guard = G_SLINT_WINDOW.lock().unwrap_or_else(|e| e.into_inner());
+        guard.0.clone()
+    };
+    if let Some(window) = window {
+        window.dispatch_event(event);
+    }
+}
+

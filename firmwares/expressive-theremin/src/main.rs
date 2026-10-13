@@ -10,6 +10,7 @@ use esp_idf_hal::delay::FreeRtos;
 use esp_idf_hal::i2c::{I2cDriver, I2cError};
 use esp_idf_hal::peripherals::Peripherals;
 use esp_idf_hal::task::block_on;
+use esp_idf_hal::units::FromValueType;
 use esp_idf_svc::sys::EspError;
 use expressive_core::processor::ControlProcessor;
 use expressive_core::{InstrumentEvent, SensorEvent};
@@ -27,6 +28,7 @@ type ThereminUi = MasterWindow;
 pub mod gauge_renderer;
 pub mod platform;
 pub mod protocol;
+pub mod touch;
 
 /// Defines the hardware architecture the firmware is built for.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -623,6 +625,59 @@ async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
     }
     log::info!("[Slave] Slint platform initialized");
 
+    // Initialize Touchscreen (GT911 via PCA9557 I2C) & UART
+    let mut i2c_opt = None;
+    let mut gt911_opt = None;
+    let mut uart_opt = None;
+
+    if let Ok(peripherals) = Peripherals::take() {
+        let pins = peripherals.pins;
+
+        // 1. Initialize I2C0 for Touch Screen (SDA=GPIO19, SCL=GPIO20)
+        let i2c_config = esp_idf_hal::i2c::I2cConfig::new().baudrate(400.kHz().into());
+        match esp_idf_hal::i2c::I2cDriver::new(peripherals.i2c0, pins.gpio19, pins.gpio20, &i2c_config) {
+            Ok(mut driver) => {
+                log::info!("[Slave] I2C0 driver initialized on SDA=GPIO19, SCL=GPIO20");
+                // Pre-reset I2C scan
+                touch::scan_i2c_bus(&mut driver);
+                // Hardware reset of GT911 via PCA9557
+                if let Err(e) = touch::reset_gt911_via_pca9557(&mut driver) {
+                    log::warn!("[Slave] PCA9557 reset failed: {:?}", e);
+                }
+                // Post-reset I2C scan (GT911 should now be responsive at 0x5D)
+                touch::scan_i2c_bus(&mut driver);
+                // Initialize GT911 driver
+                gt911_opt = touch::Gt911Driver::init(&mut driver).ok();
+                i2c_opt = Some(driver);
+            }
+            Err(e) => {
+                log::warn!("[Slave] Failed to initialize I2C0 for touch: {:?}", e);
+            }
+        }
+
+        // 2. Initialize UART1 if in normal Slave telemetry mode
+        if !is_demo {
+            let uart_config = esp_idf_hal::uart::UartConfig::new().baudrate(115200.into());
+            match esp_idf_hal::uart::AsyncUartDriver::new(
+                peripherals.uart1,
+                pins.gpio17, // TX
+                pins.gpio18, // RX
+                Option::<esp_idf_hal::gpio::AnyIOPin>::None,
+                Option::<esp_idf_hal::gpio::AnyIOPin>::None,
+                &uart_config,
+            ) {
+                Ok(uart) => {
+                    uart_opt = Some(uart);
+                }
+                Err(e) => {
+                    log::warn!("[Slave] Failed to initialize UART1: {:?}", e);
+                }
+            }
+        }
+    } else {
+        log::warn!("[Slave] Peripherals::take() failed or already taken");
+    }
+
     // Create the Slave UI (Strobe Tuner Window)
     let window = Box::new(SlaveWindow::new().map_err(|_| FirmwareError {
         step: "Slint window creation",
@@ -654,18 +709,22 @@ async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
     log::info!("[Slave] Backlight enabled (initial UI painted, zero flash)");
 
     if is_demo {
-        log::info!("[Slave] Running autonomous demo/test animation loop...");
-        run_slave_demo_loop(&window).await;
+        log::info!("[Slave] Running autonomous demo/test animation loop with touch...");
+        run_slave_demo_loop(&window, i2c_opt.as_mut(), gt911_opt.as_ref()).await;
     } else {
-        log::info!("[Slave] Running UART telemetry listener loop...");
-        run_slave_telemetry_loop(&window).await;
+        log::info!("[Slave] Running UART telemetry listener loop with touch...");
+        run_slave_telemetry_loop(&window, i2c_opt.as_mut(), gt911_opt.as_ref(), uart_opt).await;
     }
 
     Ok(())
 }
 
-/// Autonomous test/demo animation loop for the Strobe Tuner screen.
-async fn run_slave_demo_loop(window: &SlaveWindow) {
+/// Autonomous test/demo animation loop for the Strobe Tuner screen with live touch interaction.
+async fn run_slave_demo_loop(
+    window: &SlaveWindow,
+    mut i2c: Option<&mut esp_idf_hal::i2c::I2cDriver<'static>>,
+    gt911: Option<&touch::Gt911Driver>,
+) {
     let notes: [(&str, &str, f32); 8] = [
         ("A", "4", 440.0),
         ("B", "4", 493.88),
@@ -677,8 +736,41 @@ async fn run_slave_demo_loop(window: &SlaveWindow) {
         ("B", "4", 493.88),
     ];
     let mut step: u32 = 0;
+    let mut last_touch: Option<(u16, u16)> = None;
 
     loop {
+        // Poll Touchscreen and dispatch Slint Pointer events
+        if let (Some(ref gt), Some(ref mut bus)) = (gt911, i2c.as_mut()) {
+            let touch_pt = gt.poll_touch(bus);
+            match (touch_pt, last_touch) {
+                (Some((x, y)), None) => {
+                    log::info!("[Touch] PointerPressed at ({}, {})", x, y);
+                    platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerPressed {
+                        position: slint::LogicalPosition::new(x as f32, y as f32),
+                        button: slint::platform::PointerEventButton::Left,
+                    });
+                    last_touch = Some((x, y));
+                }
+                (Some((x, y)), Some((prev_x, prev_y))) => {
+                    if (x as i32 - prev_x as i32).abs() > 1 || (y as i32 - prev_y as i32).abs() > 1 {
+                        platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerMoved {
+                            position: slint::LogicalPosition::new(x as f32, y as f32),
+                        });
+                        last_touch = Some((x, y));
+                    }
+                }
+                (None, Some((prev_x, prev_y))) => {
+                    log::info!("[Touch] PointerReleased at ({}, {})", prev_x, prev_y);
+                    platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerReleased {
+                        position: slint::LogicalPosition::new(prev_x as f32, prev_y as f32),
+                        button: slint::platform::PointerEventButton::Left,
+                    });
+                    last_touch = None;
+                }
+                (None, None) => {}
+            }
+        }
+
         // Change note every ~150 frames (~3 seconds at 50fps)
         let note_idx = ((step / 150) as usize) % notes.len();
         let (n_name, n_octave, base_freq) = notes[note_idx];
@@ -728,8 +820,13 @@ async fn run_slave_demo_loop(window: &SlaveWindow) {
     }
 }
 
-/// Normal Slave mode: listens for UART telemetry packets from Master.
-async fn run_slave_telemetry_loop(window: &SlaveWindow) {
+/// Normal Slave mode: listens for UART telemetry packets from Master with live touch support.
+async fn run_slave_telemetry_loop(
+    window: &SlaveWindow,
+    mut i2c: Option<&mut esp_idf_hal::i2c::I2cDriver<'static>>,
+    gt911: Option<&touch::Gt911Driver>,
+    uart_driver: Option<esp_idf_hal::uart::AsyncUartDriver<'static, esp_idf_hal::uart::UartDriver<'static>>>,
+) {
     #[derive(Default, Clone, Copy)]
     struct SharedTelemetry {
         cents: f32,
@@ -750,77 +847,91 @@ async fn run_slave_telemetry_loop(window: &SlaveWindow) {
     }));
     let telemetry_clone = Arc::clone(&telemetry_state);
 
-    // Initialize UART1 receiver (GPIO 17 TX, GPIO 18 RX)
-    if let Ok(peripherals) = Peripherals::take() {
-        let pins = peripherals.pins;
-        let uart_config = esp_idf_hal::uart::UartConfig::new().baudrate(115200.into());
-        match esp_idf_hal::uart::AsyncUartDriver::new(
-            peripherals.uart1,
-            pins.gpio17, // TX
-            pins.gpio18, // RX
-            Option::<esp_idf_hal::gpio::AnyIOPin>::None,
-            Option::<esp_idf_hal::gpio::AnyIOPin>::None,
-            &uart_config,
-        ) {
-            Ok(uart) => {
-                log::info!("[Slave Telemetry] UART1 listening on TX=GPIO17, RX=GPIO18 at 115200 baud");
-                std::thread::spawn(move || {
-                    esp_idf_hal::task::block_on(async move {
-                        let mut cobs_buf = [0u8; MAX_MESSAGE_SIZE];
-                        let mut decode_buf = [0u8; MAX_MESSAGE_SIZE];
-                        loop {
-                            let mut byte = [0u8; 1];
-                            let mut idx = 0;
-                            loop {
-                                if uart.read(&mut byte).await.is_ok() {
-                                    if byte[0] == 0x00 {
-                                        break;
-                                    }
-                                    if idx < cobs_buf.len() {
-                                        cobs_buf[idx] = byte[0];
-                                        idx += 1;
-                                    }
-                                } else {
-                                    break;
-                                }
+    if let Some(uart) = uart_driver {
+        log::info!("[Slave Telemetry] UART1 listening on TX=GPIO17, RX=GPIO18 at 115200 baud");
+        std::thread::spawn(move || {
+            esp_idf_hal::task::block_on(async move {
+                let mut cobs_buf = [0u8; MAX_MESSAGE_SIZE];
+                let mut decode_buf = [0u8; MAX_MESSAGE_SIZE];
+                loop {
+                    let mut byte = [0u8; 1];
+                    let mut idx = 0;
+                    loop {
+                        if uart.read(&mut byte).await.is_ok() {
+                            if byte[0] == 0x00 {
+                                break;
                             }
+                            if idx < cobs_buf.len() {
+                                cobs_buf[idx] = byte[0];
+                                idx += 1;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
 
-                            if idx > 0 {
-                                if let Ok(len) = cobs::decode(&cobs_buf[..idx], &mut decode_buf) {
-                                    if let Ok(msg) = postcard::from_bytes::<MasterMessage>(&decode_buf[..len]) {
-                                        if let MasterMessage::Telemetry(tuner_state) = msg {
-                                            let mut state = telemetry_clone.lock().unwrap_or_else(|e| e.into_inner());
-                                            match tuner_state {
-                                                TunerState::On { midi_note, pitch_bend_cents } => {
-                                                    state.is_active = true;
-                                                    state.midi_note = midi_note;
-                                                    state.cents = pitch_bend_cents as f32;
-                                                    state.updated = true;
-                                                }
-                                                TunerState::Off => {
-                                                    state.is_active = false;
-                                                    state.updated = true;
-                                                }
-                                            }
+                    if idx > 0 {
+                        if let Ok(len) = cobs::decode(&cobs_buf[..idx], &mut decode_buf) {
+                            if let Ok(msg) = postcard::from_bytes::<MasterMessage>(&decode_buf[..len]) {
+                                if let MasterMessage::Telemetry(tuner_state) = msg {
+                                    let mut state = telemetry_clone.lock().unwrap_or_else(|e| e.into_inner());
+                                    match tuner_state {
+                                        TunerState::On { midi_note, pitch_bend_cents } => {
+                                            state.is_active = true;
+                                            state.midi_note = midi_note;
+                                            state.cents = pitch_bend_cents as f32;
+                                            state.updated = true;
+                                        }
+                                        TunerState::Off => {
+                                            state.is_active = false;
+                                            state.updated = true;
                                         }
                                     }
                                 }
                             }
                         }
-                    });
-                });
-            }
-            Err(e) => {
-                log::warn!("[Slave Telemetry] Could not initialize UART1: {:?}", e);
-            }
-        }
-    } else {
-        log::warn!("[Slave Telemetry] Peripherals already taken; UART receiver thread skipped");
+                    }
+                }
+            });
+        });
     }
 
     const NOTE_NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    let mut last_touch: Option<(u16, u16)> = None;
 
     loop {
+        // Poll Touchscreen and dispatch Slint Pointer events
+        if let (Some(ref gt), Some(ref mut bus)) = (gt911, i2c.as_mut()) {
+            let touch_pt = gt.poll_touch(bus);
+            match (touch_pt, last_touch) {
+                (Some((x, y)), None) => {
+                    log::info!("[Touch] PointerPressed at ({}, {})", x, y);
+                    platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerPressed {
+                        position: slint::LogicalPosition::new(x as f32, y as f32),
+                        button: slint::platform::PointerEventButton::Left,
+                    });
+                    last_touch = Some((x, y));
+                }
+                (Some((x, y)), Some((prev_x, prev_y))) => {
+                    if (x as i32 - prev_x as i32).abs() > 1 || (y as i32 - prev_y as i32).abs() > 1 {
+                        platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerMoved {
+                            position: slint::LogicalPosition::new(x as f32, y as f32),
+                        });
+                        last_touch = Some((x, y));
+                    }
+                }
+                (None, Some((prev_x, prev_y))) => {
+                    log::info!("[Touch] PointerReleased at ({}, {})", prev_x, prev_y);
+                    platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerReleased {
+                        position: slint::LogicalPosition::new(prev_x as f32, prev_y as f32),
+                        button: slint::platform::PointerEventButton::Left,
+                    });
+                    last_touch = None;
+                }
+                (None, None) => {}
+            }
+        }
+
         let (cents, is_active, midi_note, volume, expression, updated) = {
             let mut state = telemetry_state.lock().unwrap_or_else(|e| e.into_inner());
             let u = state.updated;

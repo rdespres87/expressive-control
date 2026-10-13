@@ -36,8 +36,8 @@
 - [x] Implement a debug telemetry system for tracing MIDI messages, raw sensor values, and processor state
 
 ### Hardware & Peripherals (CrowPanel 5.0" & Sensors)
-- [ ] **I2C Bus Scanner**: Implémenter un scan I2C au démarrage pour détecter et valider les adresses de tous les composants embarqués de la carte CrowPanel 5.0" V3.0 (Touch GT911 à 0x5D/0x14, IO expander PCA9557 à 0x18, etc. d'après les schémas Eagle).
-- [ ] **Driver Touchscreen**: Faire fonctionner l'écran tactile capacitif GT911 (initialisation/reset via PCA9557) et brancher les événements de touch sur le backend Slint.
+- [x] **I2C Bus Scanner**: Implémenter un scan I2C au démarrage pour détecter et valider les adresses de tous les composants embarqués de la carte CrowPanel 5.0" V3.0 (Touch GT911 à 0x5D/0x14, IO expander PCA9557 à 0x18, etc. d'après les schémas Eagle).
+- [x] **Driver Touchscreen**: Faire fonctionner l'écran tactile capacitif GT911 (initialisation/reset via PCA9557, coupure permanente de l'ampli audio PA_EN) et brancher les événements de touch sur le backend Slint.
 - [ ] **Étude Pinout & IO Expander (ADA4886 / AW9523)**:
   - Étudier le pinout complet de la carte CrowPanel 5.0" (broches disponibles : bus I2C, GPIO 43/44, etc.).
   - Valider l'architecture d'extension I2C (ex: module GPIO Expander ADA4886 / AW9523 ou MCP23017) pour interfacer :

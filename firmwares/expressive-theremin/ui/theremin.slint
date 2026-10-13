@@ -24,6 +24,7 @@ export component SlaveWindow inherits Window {
     // Dynamic color logic: Green if within 10 cents, Orange if <= 20, Red beyond
     property <color> tune_color: !root.is_active ? #333340 : (abs(root.cents) <= 10.0 ? perfect_color : (abs(root.cents) <= 20.0 ? warning_color : danger_color));
 
+
     HorizontalLayout {
         padding: 20px;
         spacing: 20px;
@@ -78,12 +79,12 @@ export component SlaveWindow inherits Window {
                 animate color { duration: 200ms; }
             }
             
-            // BOTTOM: Details (Freq / Transpose)
+            // BOTTOM: Details
             HorizontalLayout {
                 alignment: center;
                 spacing: 40px;
-                Text { text: root.is_active ? root.frequency : "-- Hz"; font-size: 24px; color: #888899; font-weight: 600; }
-                Text { text: "TRANSPOSE: " + root.transpose; font-size: 24px; color: #888899; font-weight: 600; }
+                Text { text: root.is_active ? root.frequency : "-- Hz"; font-size: 22px; color: #888899; font-weight: 600; vertical-alignment: center; }
+                Text { text: "TRANSPOSE: " + root.transpose; font-size: 22px; color: #888899; font-weight: 600; vertical-alignment: center; }
             }
         }
 

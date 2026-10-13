@@ -143,8 +143,9 @@ The firmware must be built with:
 
 1. **PSRAM must be OPI mode** — QPI mode won't provide enough bandwidth for dual buffering
 2. **GPIO0 contention** — GPIO0 is shared with LCD PCLK; do not use as GPIO
-3. **No touch integration yet** — GT911 capacitive touch (I2C via PCA9557) is not yet integrated
-4. **Full frame flush** — Currently flushes entire dirty region; could be optimized for partial updates
+3. **Capacitive Touch & IO Expander (GT911 & PCA9557)** — Intégré via I2C (`SDA` = GPIO 19, `SCL` = GPIO 20). Le PCA9557 pilote le reset du GT911 (`IO0`), l'adresse/INT (`IO1`), et l'alimentation de l'amplificateur audio (`IO2`).
+4. **Audio Amplifier Mute / Disabled** — Le projet n'utilisant pas d'audio, la broche `PA_EN` (PCA9557 `IO2`) est systématiquement forcée et maintenue à l'état BAS (`LOW`), coupant totalement l'ampli audio embarqué (zéro consommation parasite, aucun souffle).
+5. **Full frame flush** — Currently flushes entire dirty region; could be optimized for partial updates
 
 ## Bug Fix: Struct Layout Mismatch (2026-10-09)
 
