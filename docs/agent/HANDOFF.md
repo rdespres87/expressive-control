@@ -1,27 +1,24 @@
 # Session Handoff
 
 ## Context
-Implemented a subpixel antialiased Strobe Tuner Gauge and needle overlay on the Elecrow CrowPanel 5.0" ESP32-S3 (800×480 RGB LCD):
-- **Root Cause Solved**: Slint MCU `renderer-software` only supports translations, strictly ignoring rotations (`transform-rotation`, `rotation-angle`). Slint `Path` cannot be used on ESP32-S3 as it requires `std` / `fontique` / `memmap2`.
-- **Subpixel Vector Overlay Engine (`gauge_renderer.rs`)**: Implemented distance-based coverage with fast RGB565 alpha blending (Wu-style antialiasing) directly into the active back-buffer before VSYNC swap.
-- **Visual Design Validated**:
-  - Continuous circular rail track: 20.0 px thickness.
-  - 101 radial calibration notches: 5.0 px regular, 7.5 px major ($\pm 10$ cents), 10.0 px center marker (0 cents).
-  - Heavy analog needle: 10.0 px shaft with 18.0 px diamond tip reaching the track.
-  - Opaque background clear per frame preventing double-buffering ghosting.
-- **Dual Mode Support**:
-  - `master` (default): Dual ToF sensors + USB MIDI + UART telemetry.
-  - `slave`: UART1 telemetry receiver (`MasterMessage::Telemetry`) rendering the Strobe Tuner in real-time.
-  - `demo`: Autonomous demonstration/test animation sweeping cents, notes, and bargraphs.
+Implemented the unified interactive dual-view UI and the lock-free production architecture on the Elecrow CrowPanel 5.0" ESP32-S3:
+- **Default Master View & Screen Toggling**: Boots directly into the Master settings view. Touch buttons (`[ ⚙ CONFIG ]` in Slave view and `[ ◀ TUNER ]` in Master view) switch views cleanly with hardware double-buffer clearing (`platform::clear_framebuffers()`).
+- **Touch Ergonomics & Scaled Typography**: All interactive targets (buttons, incrementers, cards) enlarged for finger touch on the 5" screen (56~62px diameter buttons, 20~24px bold text).
+- **Needle & Gauge Fixes**: Clamped needle to [-50, +50] cents, upper semi-circle only. Restricted gauge clearing to `x <= 560` at `y < 85` to avoid clipping the top-right Config button.
+- **Lock-Free Concurrency Architecture (`concurrency.rs`)**:
+  - `AtomicTunerSnapshot`: SeqLock wait-free snapshot allowing the real-time sensor/audio loop to publish display state without blocking.
+  - `create_config_channel`: `heapless::spsc::Queue` ringbuffer passing Slint UI config messages to `TofThereminProcessor` with zero locks on the audio path.
+  - Processor ownership: `TofThereminProcessor` is exclusively owned by the real-time loop; no mutexes on the audio thread.
+- **Hardware Bus & Pinout Clarification**:
+  - Confirmed the single physical I2C bus on CrowPanel (GPIO 19 SDA / GPIO 20 SCL) shared between GT911, PCA9557, and external ToF sensors.
+  - Added task in `TASKS.md` for wiring dual VL53L4CD sensors directly using GPIO 43 (XSHUT Pitch) and GPIO 44 (XSHUT Volume) with 50 Hz polling before adding the ADA4886/AW9523 expander.
 
-## Next Steps
-1. Wire real hardware ToF sensors (VL53L4CD) on Master board and connect UART1 link to Slave board.
-2. Implement GT911 capacitive touch screen driver (I2C) with PCA9557 reset sequencing on the CrowPanel.
+## Verification
+- `cargo fmt --all -- --check` : Clean.
+- `cargo clippy --workspace -- -D warnings` : 100% clean (0 warnings).
+- `cargo clippy --features demo -- -D warnings` : 100% clean (0 warnings).
+- `cargo test --workspace` : 41 tests passing.
+- `espflash` : Successfully flashed and running on CrowPanel 5.0".
 
-## Commands to test:
-- **Build Master:** `cargo build --release` (in `firmwares/expressive-theremin`)
-- **Build Slave (telemetry):** `cargo build --release --features slave`
-- **Build Demo (test mode):** `cargo build --release --features demo`
-- **Flash firmware:** `espflash flash -B 460800 --chip esp32s3 --port /dev/cu.usbserial-1420 target/xtensa-esp32s3-espidf/release/expressive-theremin`
-- **PC Simulator & Tests:** `cargo test --workspace`
-
+## Next Logical Action
+Wire and validate dual VL53L4CD ToF sensors directly onto the CrowPanel via GPIO 43 and GPIO 44 (XSHUT address sequencing) with 50 Hz polling on I2C (GPIO 19/20).

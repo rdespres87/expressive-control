@@ -81,7 +81,7 @@ impl Gt911Driver {
         for &addr in &[GT911_ADDR_5D, GT911_ADDR_14] {
             let mut prod_id = [0u8; 4];
             if i2c.write_read(addr, &[0x81, 0x40], &mut prod_id, 50).is_ok() {
-                let id_clean: Vec<u8> = prod_id.iter().copied().take_while(|&b| b >= 32 && b <= 126).collect();
+                let id_clean: Vec<u8> = prod_id.iter().copied().take_while(|&b| (32..=126).contains(&b)).collect();
                 if let Ok(id_str) = core::str::from_utf8(&id_clean) {
                     if !id_str.is_empty() {
                         log::info!("[Touch] GT911 confirmed at address 0x{:02X}, Product ID: '{}'", addr, id_str);

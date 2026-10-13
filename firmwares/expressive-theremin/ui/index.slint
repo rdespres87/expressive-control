@@ -1,4 +1,95 @@
-import { SlaveWindow } from "theremin.slint";
-import { MasterWindow } from "master.slint";
+import { SlaveView, SlaveWindow } from "theremin.slint";
+import { MasterView, MasterWindow } from "master.slint";
+
+export component MainWindow inherits Window {
+    width: 800px;
+    height: 480px;
+    background: #0c0b0f;
+    title: "Expressive Theremin";
+
+    in-out property <bool> is_master_view: true;
+
+    // Slave (Tuner) Properties
+    in-out property <string> note_name: "C";
+    in-out property <string> octave: "4";
+    in-out property <float> cents: 0.0;
+    in-out property <bool> is_active: false;
+    in-out property <float> volume: 0.0;
+    in-out property <float> expression: 0.0;
+    in-out property <string> frequency: "-- Hz";
+    in-out property <string> transpose: "+0";
+
+    // Master (Config) Properties
+    in-out property <string> current_root: "C";
+    in-out property <string> current_scale: "Chromatic";
+    in-out property <int> current_octave: 4;
+    in-out property <int> octave_range: 2;
+    in-out property <int> pitch_quantization: 50;
+    in-out property <string> filter_speed: "Fast";
+    in-out property <string> midi_mode: "Standard";
+    in-out property <int> pb_range: 2;
+
+    // Master Callbacks
+    callback root_changed(string);
+    callback scale_changed(string);
+    callback octave_changed(int);
+    callback range_changed(int);
+    callback quantization_changed(int);
+    callback filter_changed(string);
+    callback midi_mode_changed(string);
+    callback pb_range_changed(int);
+
+    // View switch callback
+    callback view_switched(bool);
+
+    slave_view := SlaveView {
+        width: 100%;
+        height: 100%;
+        visible: !root.is_master_view;
+
+        note_name: root.note_name;
+        octave: root.octave;
+        cents: root.cents;
+        is_active: root.is_active;
+        volume: root.volume;
+        expression: root.expression;
+        frequency: root.frequency;
+        transpose: root.transpose;
+
+        switch_to_master => {
+            root.is_master_view = true;
+            root.view_switched(true);
+        }
+    }
+
+    master_view := MasterView {
+        width: 100%;
+        height: 100%;
+        visible: root.is_master_view;
+
+        current_root <=> root.current_root;
+        current_scale <=> root.current_scale;
+        current_octave <=> root.current_octave;
+        octave_range <=> root.octave_range;
+        pitch_quantization <=> root.pitch_quantization;
+        filter_speed <=> root.filter_speed;
+        midi_mode <=> root.midi_mode;
+        pb_range <=> root.pb_range;
+
+        root_changed(val) => { root.root_changed(val); }
+        scale_changed(val) => { root.scale_changed(val); }
+        octave_changed(val) => { root.octave_changed(val); }
+        range_changed(val) => { root.range_changed(val); }
+        quantization_changed(val) => { root.quantization_changed(val); }
+        filter_changed(val) => { root.filter_changed(val); }
+        midi_mode_changed(val) => { root.midi_mode_changed(val); }
+        pb_range_changed(val) => { root.pb_range_changed(val); }
+
+        switch_to_slave => {
+            root.is_master_view = false;
+            root.view_switched(false);
+        }
+    }
+}
 
 export { SlaveWindow, MasterWindow }

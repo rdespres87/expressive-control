@@ -36,7 +36,7 @@ fn blend_pixel_alpha(
     if alpha <= 0.01 {
         return;
     }
-    if x < 0 || x >= stride as i32 || y < 0 || y >= 480 {
+    if x < 0 || x >= stride as i32 || !(0..480).contains(&y) {
         return;
     }
 
@@ -77,6 +77,7 @@ fn blend_pixel_alpha(
 }
 
 /// Draw a subpixel antialiased line segment with specified thickness.
+#[allow(clippy::too_many_arguments)]
 fn draw_aa_segment(
     buf: &mut [Rgb565Pixel],
     stride: usize,
@@ -194,14 +195,15 @@ pub fn draw_strobe_gauge(
     let r_track: f32 = 232.0;
     let pi = std::f32::consts::PI;
 
-    // 0. Clear gauge area with background color (#0c0b0f) to prevent ghosting between double buffers
+    // 0. Clear gauge area with background color (#0c0b0f) to prevent ghosting between double buffers.
+    // At y < 85, the circular gauge is centered around x=400 and does not exceed x=550.
+    // Restricting x_end to 560 for y < 85 guarantees the top-right Config button (x: 610..780, y: 15..71)
+    // is never clipped or overwritten by the gauge renderer.
     let bg_pixel = Rgb565Pixel(0x0841);
-    let y_start = 14;
-    let y_end = 278;
-    let x_start = 140;
-    let x_end = 660;
-    for y in y_start..=y_end {
+    for y in 14..=278 {
         let row_start = y * stride;
+        let x_start = if y < 85 { 240 } else { 140 };
+        let x_end = if y < 85 { 560 } else { 650 };
         for x in x_start..=x_end {
             buf[row_start + x] = bg_pixel;
         }
@@ -217,7 +219,8 @@ pub fn draw_strobe_gauge(
     let col_orange = RgbColor::new(255, 170, 0);       // Warm orange (<= 20 cents)
     let col_red = RgbColor::new(255, 51, 68);          // Crimson red (> 20 cents)
 
-    let abs_cents = params.cents.abs();
+    let clamped_cents = params.cents.clamp(-50.0, 50.0);
+    let abs_cents = clamped_cents.abs();
     let tune_color = if !params.is_active {
         RgbColor::new(70, 70, 95)
     } else if abs_cents <= 10.0 {
@@ -257,8 +260,8 @@ pub fn draw_strobe_gauge(
         let y1 = cy - r_out * cos_a;
 
         let is_lit = params.is_active && (
-            (params.cents <= -0.5 && tick_cents >= params.cents && tick_cents <= 0.0) ||
-            (params.cents >= 0.5 && tick_cents <= params.cents && tick_cents >= 0.0) ||
+            (clamped_cents <= -0.5 && tick_cents >= clamped_cents && tick_cents <= 0.0) ||
+            (clamped_cents >= 0.5 && tick_cents <= clamped_cents && tick_cents >= 0.0) ||
             (abs_cents < 0.5 && i == 50)
         );
 
@@ -277,9 +280,10 @@ pub fn draw_strobe_gauge(
 
     // 3. Pivoting Needle (Heavy instrument-style 10.0px needle with 18.0px diamond head)
     if params.is_active {
-        let needle_a = (params.cents / 50.0) * (pi / 2.0);
+        // Strictly constrained to [-pi/2, +pi/2] (upper semi-circle only)
+        let needle_a = (clamped_cents / 50.0) * (pi / 2.0);
         let sin_n = needle_a.sin();
-        let cos_n = needle_a.cos();
+        let cos_n = needle_a.cos().max(0.0); // Never point below the horizontal line
 
         // Needle shaft from R = 90px to R = 236px, thickness 10.0px
         let n_x0 = cx + 90.0 * sin_n;

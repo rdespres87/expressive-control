@@ -41,12 +41,16 @@
 - [ ] **Étude Pinout & IO Expander (ADA4886 / AW9523)**:
   - Étudier le pinout complet de la carte CrowPanel 5.0" (broches disponibles : bus I2C, GPIO 43/44, etc.).
   - Valider l'architecture d'extension I2C (ex: module GPIO Expander ADA4886 / AW9523 ou MCP23017) pour interfacer :
-    - 2 capteurs ToF VL53L4CD (lignes XSHUT pour attribution d'adresses + interruptions)
+    - 2 capteurs ToF VL53L4CD (lignes XSHUT pour attribution d'adresses)
     - 1 encodeur rotatif avec bouton cliquable
     - 3 boutons poussoirs de navigation/contrôle
+- [ ] **Validation Double ToF direct (XSHUT sur GPIO 43 & 44 sans expander)**:
+  - Câbler les broches XSHUT des 2 VL53L4CD sur GPIO 43 et GPIO 44.
+  - Séquencer le boot pour remapper dynamiquement l'adresse I2C du second capteur (0x29 -> 0x30 / 0x31).
+  - Implémenter le polling 50 Hz des deux distances ToF (Pitch & Volume) sur l'unique bus I2C sans attendre l'expander ADA4886.
 
 ### Interface & Ergonomie (Slint UI)
-- [ ] **UI Unifiée Master / Slave (Mono-Écran)**: Concevoir une vue commutable permettant de basculer dynamiquement entre la vue Master (paramètres, capteurs, calibration) et la vue Slave (grand Strobe Tuner) via un bouton (cas d'un instrument avec un seul écran final).
+- [x] **UI Unifiée Master / Slave (Mono-Écran)**: Vue commutable dynamique permettant de basculer entre la vue Master (réglages Root, Scale, Octave, PB range, Quantization, Filter speed) et la vue Slave (grand Strobe Tuner) via boutons tactiles (`CONFIG` / `TUNER`) avec synchronisation directe du `TofThereminProcessor` en local (mono-carte, sans passer par l'UART).
 - [ ] **Internationalisation (i18n)**: Prévoir le support multilingue (Français et Anglais pour commencer) pour l'ensemble des textes, libellés et menus de l'UI Slint.
 
 ### Système, Déploiement & Outils

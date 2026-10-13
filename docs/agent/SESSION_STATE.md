@@ -1,26 +1,27 @@
 # Session State
 
 ## Status
-IN_PROGRESS
+READY_FOR_HANDOFF
 
 ## Milestone
 V0.6 ToF Theremin Prototype (ESP32-S3 + CrowPanel 5.0" Slint UI)
 
 ## Current task
-Intégration du touchscreen GT911 via PCA9557 et test tactile en direct sur la CrowPanel 5.0".
+Orchestration Grill : Architecture temps réel lock-free et ergonomie tactile unifiée.
 
 ## Last completed
-- Implémenté le module `touch.rs` :
-  - Scanner de bus I2C (SDA=GPIO19, SCL=GPIO20).
-  - Séquence matérielle de reset du GT911 via l'IO expander PCA9557 (`0x18`) pour sélection de l'adresse `0x5D`.
-  - Pilote GT911 avec quittance de buffer (`0x814E`) et extraction des coordonnées X/Y normalisées (0..800, 0..480).
-- Branché les événements de toucher dans Slint (`platform::dispatch_pointer_event`).
-- Ajouté le bouton tactile interactif "TOUCH TEST" dans `theremin.slint` avec retour visuel immédiat (cyan, coordonnées X/Y, comptage des taps).
-- Le scanner I2C et la séquence de réveil PCA9557 ont bien validé la présence du PCA9557 à `0x18` et du GT911 à `0x5D`.
-- Amplificateur audio (`PA_EN` sur IO2 du PCA9557) explicitement désactivé et maintenu à `LOW` (zéro bruit parasite, consommation minimale).
+- Démarrage par défaut sur l'écran Master (`is_master_view: true`).
+- Agrandissement massif des zones tactiles et des typographies sur tout le système (Master & Slave).
+- Correction du chevauchement de la jauge sur le bouton Config (z-order Slint + restriction x<=560 sur y<85).
+- Réalisation complète de la session Grill Orchestrator (Maker + Inquisitor) :
+  - Création du module `concurrency.rs` (SeqLock wait-free `AtomicTunerSnapshot` et file SPSC lock-free `ConfigMessage` via `heapless 0.9`).
+  - Découplage complet de `TofThereminProcessor` : suppression de tout `Mutex` bloquant sur la boucle de synthèse audio/capteurs.
+  - Résolution intégrale de tous les avertissements Clippy (`cargo clippy --workspace -- -D warnings` et `--features demo` à 100% sans warning).
+  - Tâche ajoutée dans `TASKS.md` pour le pilotage direct du double ToF via GPIO 43/44 (XSHUT sans expander).
+  - Validation CI locale et flashage du firmware release sur l'ESP32-S3.
 
 ## Next action
-- Validation par l'utilisateur du toucher physique sur la dalle CrowPanel (bouton "TOUCH TEST" et comptage des taps).
+- Câbler et valider le double ToF VL53L4CD directement sur l'ESP32-S3 via GPIO 43 (XSHUT Pitch) et GPIO 44 (XSHUT Volume) avec polling à 50 Hz.
 
 ## Blockers
 - Aucun.

@@ -8,7 +8,7 @@
 
 #![allow(dead_code)]
 
-use crate::MasterWindow;
+use crate::MainWindow;
 use core::ffi::c_void;
 use std::rc::Rc;
 use std::sync::{LazyLock, Mutex};
@@ -50,7 +50,7 @@ pub struct SensorState {
 static G_SENSOR_STATE: LazyLock<Mutex<SensorState>> =
     LazyLock::new(|| Mutex::new(SensorState::default()));
 
-pub static G_WINDOW_WEAK: LazyLock<Mutex<Option<slint::Weak<MasterWindow>>>> =
+pub static G_WINDOW_WEAK: LazyLock<Mutex<Option<slint::Weak<MainWindow>>>> =
     LazyLock::new(|| Mutex::new(None));
 
 pub fn update_sensor_state(state: SensorState) {
@@ -58,7 +58,7 @@ pub fn update_sensor_state(state: SensorState) {
     *guard = state;
 }
 
-pub fn poll_ui_updates(_window_weak: &slint::Weak<MasterWindow>) {
+pub fn poll_ui_updates(_window_weak: &slint::Weak<MainWindow>) {
     #[allow(unused_variables)]
     let state = {
         let guard = G_SENSOR_STATE.lock().unwrap_or_else(|e| e.into_inner());
@@ -169,7 +169,7 @@ impl LcdDriver {
             data_width: 16,
             bits_per_pixel: 16,
             num_fbs: 2, // Double buffering in PSRAM
-            bounce_buffer_size_px: (H_RES * 20) as usize, // 20 lines in internal DRAM (32KB) prevents DMA starvation
+            bounce_buffer_size_px: H_RES * 20, // 20 lines in internal DRAM (32KB) prevents DMA starvation
             sram_trans_align: 4,
             psram_trans_align: 64,
             hsync_gpio_num: LCD_HSYNC,
@@ -376,6 +376,12 @@ pub struct EspPlatform {
     window: Rc<MinimalSoftwareWindow>,
 }
 
+impl Default for EspPlatform {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EspPlatform {
     pub fn new() -> Self {
         let window = MinimalSoftwareWindow::new(RepaintBufferType::SwappedBuffers);
@@ -462,5 +468,18 @@ pub fn dispatch_pointer_event(event: slint::platform::WindowEvent) {
     if let Some(window) = window {
         window.dispatch_event(event);
     }
+}
+
+/// Fully clear both double-buffers to background color (#0c0b0f).
+pub fn clear_framebuffers() {
+    with_lcd_mut(|lcd| {
+        let bg = Rgb565Pixel(0x0841); // #0c0b0f
+        for p in lcd.buf1.iter_mut() {
+            *p = bg;
+        }
+        for p in lcd.buf2.iter_mut() {
+            *p = bg;
+        }
+    });
 }
 

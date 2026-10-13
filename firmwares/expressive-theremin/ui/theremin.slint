@@ -1,19 +1,19 @@
-export component SlaveWindow inherits Window {
-    width: 800px;
-    height: 480px;
-    background: #0c0b0f; // Very dark warm background to contrast with wood
-    title: "Theremin Tuner (Slave)";
+export component SlaveView inherits Rectangle {
+    width: 100%;
+    height: 100%;
+    background: #0c0b0f;
 
-    // Data injected by the Rust firmware via UART
+    // Data injected by the Rust firmware
     in property <string> note_name: "C";
     in property <string> octave: "4";
     in property <float> cents: 0.0; // -50.0 to +50.0
     in property <bool> is_active: false;
-    // New Data
     in property <float> volume: 0.0; // 0.0 to 1.0
     in property <float> expression: 0.0; // 0.0 to 1.0
     in property <string> frequency: "-- Hz";
     in property <string> transpose: "+0";
+
+    callback switch_to_master();
 
     // UI Theme
     property <color> accent_color: #00f0ff; // Neon cyan
@@ -24,36 +24,35 @@ export component SlaveWindow inherits Window {
     // Dynamic color logic: Green if within 10 cents, Orange if <= 20, Red beyond
     property <color> tune_color: !root.is_active ? #333340 : (abs(root.cents) <= 10.0 ? perfect_color : (abs(root.cents) <= 20.0 ? warning_color : danger_color));
 
-
     HorizontalLayout {
         padding: 20px;
         spacing: 20px;
         
         // LEFT: Volume Bargraph (CC7)
         VerticalLayout {
-            width: 40px;
+            width: 44px;
             alignment: center;
-            spacing: 15px; 
+            spacing: 12px; 
             HorizontalLayout {
                 alignment: center;
                 Rectangle {
-                    width: 20px; 
+                    width: 26px; 
                     height: 300px; 
                     background: #1a1a24;
-                    border-radius: 10px;
+                    border-radius: 13px;
                     HorizontalLayout { alignment: center; 
                         Rectangle {
                             width: 100%;
                             height: parent.height * root.volume;
                             y: parent.height - self.height;
                             background: root.accent_color;
-                            border-radius: 10px;
+                            border-radius: 13px;
                             animate height { duration: 50ms; }
                         }
                     }
                 }
             }
-            Text { text: "VOL"; color: #666670; font-size: 14px; horizontal-alignment: center; font-weight: 700; }
+            Text { text: "VOL"; color: #88889a; font-size: 16px; horizontal-alignment: center; font-weight: 800; }
         }
 
         VerticalLayout {
@@ -65,7 +64,6 @@ export component SlaveWindow inherits Window {
             gauge := Rectangle {
                 height: 250px; 
                 width: 100%;
-                background: #0c0b0f;
             }
             
             // MIDDLE: Note Display (A4)
@@ -82,38 +80,88 @@ export component SlaveWindow inherits Window {
             // BOTTOM: Details
             HorizontalLayout {
                 alignment: center;
-                spacing: 40px;
-                Text { text: root.is_active ? root.frequency : "-- Hz"; font-size: 22px; color: #888899; font-weight: 600; vertical-alignment: center; }
-                Text { text: "TRANSPOSE: " + root.transpose; font-size: 22px; color: #888899; font-weight: 600; vertical-alignment: center; }
+                spacing: 60px;
+                Text { text: root.is_active ? root.frequency : "-- Hz"; font-size: 26px; color: #9999aa; font-weight: 700; vertical-alignment: center; }
+                Text { text: "TRANSPOSE: " + root.transpose; font-size: 26px; color: #9999aa; font-weight: 700; vertical-alignment: center; }
             }
         }
 
         // RIGHT: Expression Bargraph (CC11)
         VerticalLayout {
-            width: 40px;
+            width: 44px;
             alignment: center;
-            spacing: 15px; 
+            spacing: 12px; 
             HorizontalLayout {
                 alignment: center;
                 Rectangle {
-                    width: 20px; 
+                    width: 26px; 
                     height: 300px; 
                     background: #1a1a24;
-                    border-radius: 10px;
+                    border-radius: 13px;
                     HorizontalLayout { alignment: center;
                         Rectangle {
                             width: 100%;
                             height: parent.height * root.expression;
                             y: parent.height - self.height; 
                             background: #ff0077; 
-                            border-radius: 10px;
+                            border-radius: 13px;
                             animate height { duration: 50ms; }
                         }
                     }
                 }
             }
-            Text { text: "EXP"; color: #666670; font-size: 14px; horizontal-alignment: center; font-weight: 700; }
+            Text { text: "EXP"; color: #88889a; font-size: 16px; horizontal-alignment: center; font-weight: 800; }
+        }
+    }
+
+    // Top-Right: Switch to Config / Master Screen Button (Placed at end of SlaveView for topmost z-order)
+    config_btn := Rectangle {
+        x: root.width - self.width - 20px;
+        y: 15px;
+        width: 170px;
+        height: 56px;
+        border-radius: 12px;
+        background: config_touch.pressed ? #00f0ff : (config_touch.has_hover ? #2a2a3e : #1c1c28);
+        border-width: 2px;
+        border-color: config_touch.pressed ? #ffffff : #00f0ff;
+        animate background { duration: 100ms; }
+        
+        Text {
+            text: "⚙ CONFIG";
+            font-size: 22px;
+            font-weight: 800;
+            color: config_touch.pressed ? #000000 : #00f0ff;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+        
+        config_touch := TouchArea {
+            clicked => {
+                root.switch_to_master();
+            }
         }
     }
 }
 
+export component SlaveWindow inherits Window {
+    width: 800px;
+    height: 480px;
+    background: #0c0b0f;
+    title: "Theremin Tuner (Slave)";
+
+    in property <string> note_name <=> view.note_name;
+    in property <string> octave <=> view.octave;
+    in property <float> cents <=> view.cents;
+    in property <bool> is_active <=> view.is_active;
+    in property <float> volume <=> view.volume;
+    in property <float> expression <=> view.expression;
+    in property <string> frequency <=> view.frequency;
+    in property <string> transpose <=> view.transpose;
+
+    callback switch_to_master <=> view.switch_to_master;
+
+    view := SlaveView {
+        width: 100%;
+        height: 100%;
+    }
+}
