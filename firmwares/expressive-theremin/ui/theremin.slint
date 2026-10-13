@@ -116,28 +116,41 @@ export component SlaveView inherits Rectangle {
 
     // Top-Right: Switch to Config / Master Screen Button (Placed at end of SlaveView for topmost z-order)
     config_btn := Rectangle {
-        x: root.width - self.width - 20px;
-        y: 15px;
-        width: 170px;
-        height: 56px;
-        border-radius: 12px;
+        x: root.width - self.width - 76px;
+        y: 14px;
+        width: 130px;
+        height: 48px;
+        border-radius: 10px;
         background: config_touch.pressed ? #00f0ff : (config_touch.has_hover ? #2a2a3e : #1c1c28);
         border-width: 2px;
         border-color: config_touch.pressed ? #ffffff : #00f0ff;
-        animate background { duration: 100ms; }
         
-        Text {
-            text: "⚙ CONFIG";
-            font-size: 22px;
-            font-weight: 800;
-            color: config_touch.pressed ? #000000 : #00f0ff;
-            vertical-alignment: center;
-            horizontal-alignment: center;
+        VerticalLayout {
+            padding: 4px;
+            spacing: 1px;
+            alignment: center;
+            
+            Text {
+                text: "CONFIG ▶";
+                font-size: 19px;
+                font-weight: 900;
+                color: config_touch.pressed ? #000000 : #00f0ff;
+                horizontal-alignment: center;
+            }
+            Text {
+                text: "SETTINGS";
+                font-size: 11px;
+                font-weight: 700;
+                color: config_touch.pressed ? #222230 : #88889a;
+                horizontal-alignment: center;
+            }
         }
         
         config_touch := TouchArea {
-            clicked => {
-                root.switch_to_master();
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    root.switch_to_master();
+                }
             }
         }
     }

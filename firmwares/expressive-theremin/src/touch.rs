@@ -74,6 +74,16 @@ pub struct Gt911Driver {
     addr: u8,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TouchEvent {
+    /// Controller has not yet produced a new report; maintain previous state.
+    NoUpdate,
+    /// Finger is actively contacting screen at (x, y).
+    Pressed { x: u16, y: u16 },
+    /// Finger was lifted off screen (0 contact points reported).
+    Released,
+}
+
 impl Gt911Driver {
     /// Initialize and detect GT911 after PCA9557 reset.
     pub fn init(i2c: &mut I2cDriver) -> Result<Self, &'static str> {
@@ -96,42 +106,35 @@ impl Gt911Driver {
         Ok(Self { addr: GT911_ADDR_5D })
     }
 
-    /// Poll for active touch contact. Returns `Some((x, y))` in screen coordinates (0..800, 0..480).
-    pub fn poll_touch(&self, i2c: &mut I2cDriver) -> Option<(u16, u16)> {
-        // Read Point Status register (0x814E)
-        let mut status = [0u8; 1];
-        if i2c.write_read(self.addr, &[0x81, 0x4E], &mut status, 20).is_err() {
-            return None;
+    /// Poll for active touch contact with atomic single-transaction I2C read.
+    pub fn poll_touch(&self, i2c: &mut I2cDriver) -> TouchEvent {
+        // Read 7 bytes atomically: Status (0x814E), TrackID (0x814F), X_L, X_H, Y_L, Y_H, Size
+        let mut report = [0u8; 7];
+        if i2c.write_read(self.addr, &[0x81, 0x4E], &mut report, 20).is_err() {
+            return TouchEvent::NoUpdate;
         }
 
-        let st = status[0];
-        let buffer_ready = (st & 0x80) != 0;
-        let num_points = st & 0x0F;
+        let status = report[0];
+        let buffer_ready = (status & 0x80) != 0;
+        let num_points = status & 0x0F;
 
         if !buffer_ready {
-            return None;
+            return TouchEvent::NoUpdate;
         }
 
-        // Acknowledge read by clearing the buffer status bit (mandatory for GT911 to provide next frame)
+        // Acknowledge read by resetting status to 0 AFTER grabbing coordinates
         let _ = i2c.write(self.addr, &[0x81, 0x4E, 0x00], 20);
 
         if num_points == 0 {
-            return None;
+            return TouchEvent::Released;
         }
 
-        // Read Point 1 data: 4 bytes from 0x8150 (X_low, X_high, Y_low, Y_high)
-        let mut pt_data = [0u8; 4];
-        if i2c.write_read(self.addr, &[0x81, 0x50], &mut pt_data, 20).is_ok() {
-            let raw_x = (pt_data[0] as u16) | ((pt_data[1] as u16) << 8);
-            let raw_y = (pt_data[2] as u16) | ((pt_data[3] as u16) << 8);
+        let raw_x = (report[2] as u16) | ((report[3] as u16) << 8);
+        let raw_y = (report[4] as u16) | ((report[5] as u16) << 8);
 
-            // Clamp to screen bounds 800x480
-            let x = raw_x.min(799);
-            let y = raw_y.min(479);
+        let x = raw_x.min(799);
+        let y = raw_y.min(479);
 
-            return Some((x, y));
-        }
-
-        None
+        TouchEvent::Pressed { x, y }
     }
 }

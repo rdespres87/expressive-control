@@ -818,9 +818,16 @@ async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
     });
 
     let win_switch = window.as_weak();
+    let last_switch = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
     window.on_view_switched(move |is_master| {
+        let now_ms = unsafe { (esp_idf_sys::esp_timer_get_time() / 1000) as u32 };
+        let prev_ms = last_switch.load(std::sync::atomic::Ordering::Relaxed);
+        if now_ms.wrapping_sub(prev_ms) < 250 {
+            log::info!("[UI] Ignoring rapid view switch (debounce 250ms)");
+            return;
+        }
+        last_switch.store(now_ms, std::sync::atomic::Ordering::Relaxed);
         log::info!("[UI] Screen view toggled: is_master = {}", is_master);
-        platform::clear_framebuffers();
         if let Some(w) = win_switch.upgrade() {
             w.window().request_redraw();
         }
@@ -869,6 +876,8 @@ async fn run_slave_demo_loop(
     let mut step: u32 = 0;
     let mut last_touch: Option<(u16, u16)> = None;
     let snapshot = concurrency::AtomicTunerSnapshot::new();
+    let mut prev_is_master = window.get_is_master_view();
+    let mut force_redraw_frames: u8 = 0;
 
     loop {
         // 1. Drain pending UI configuration messages lock-free (zero mutex contention!)
@@ -878,33 +887,38 @@ async fn run_slave_demo_loop(
 
         // 2. Poll Touchscreen and dispatch Slint Pointer events
         if let (Some(gt), Some(ref mut bus)) = (gt911, i2c.as_mut()) {
-            let touch_pt = gt.poll_touch(bus);
-            match (touch_pt, last_touch) {
-                (Some((x, y)), None) => {
-                    log::info!("[Touch] PointerPressed at ({}, {})", x, y);
-                    platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerPressed {
-                        position: slint::LogicalPosition::new(x as f32, y as f32),
-                        button: slint::platform::PointerEventButton::Left,
-                    });
-                    last_touch = Some((x, y));
-                }
-                (Some((x, y)), Some((prev_x, prev_y))) => {
-                    if (x as i32 - prev_x as i32).abs() > 1 || (y as i32 - prev_y as i32).abs() > 1 {
-                        platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerMoved {
-                            position: slint::LogicalPosition::new(x as f32, y as f32),
-                        });
-                        last_touch = Some((x, y));
+            match gt.poll_touch(bus) {
+                touch::TouchEvent::Pressed { x, y } => {
+                    match last_touch {
+                        None => {
+                            log::info!("[Touch] PointerPressed at ({}, {})", x, y);
+                            platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerPressed {
+                                position: slint::LogicalPosition::new(x as f32, y as f32),
+                                button: slint::platform::PointerEventButton::Left,
+                            });
+                            last_touch = Some((x, y));
+                        }
+                        Some((prev_x, prev_y)) => {
+                            if (x as i32 - prev_x as i32).abs() > 1 || (y as i32 - prev_y as i32).abs() > 1 {
+                                platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerMoved {
+                                    position: slint::LogicalPosition::new(x as f32, y as f32),
+                                });
+                                last_touch = Some((x, y));
+                            }
+                        }
                     }
                 }
-                (None, Some((prev_x, prev_y))) => {
-                    log::info!("[Touch] PointerReleased at ({}, {})", prev_x, prev_y);
-                    platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerReleased {
-                        position: slint::LogicalPosition::new(prev_x as f32, prev_y as f32),
-                        button: slint::platform::PointerEventButton::Left,
-                    });
-                    last_touch = None;
+                touch::TouchEvent::Released => {
+                    if let Some((prev_x, prev_y)) = last_touch {
+                        log::info!("[Touch] PointerReleased at ({}, {})", prev_x, prev_y);
+                        platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerReleased {
+                            position: slint::LogicalPosition::new(prev_x as f32, prev_y as f32),
+                            button: slint::platform::PointerEventButton::Left,
+                        });
+                        last_touch = None;
+                    }
                 }
-                (None, None) => {}
+                touch::TouchEvent::NoUpdate => {}
             }
         }
 
@@ -965,6 +979,17 @@ async fn run_slave_demo_loop(
 
         // 5. Update Slint UI from snapshot if Tuner view is visible
         let is_master = window.get_is_master_view();
+        if is_master != prev_is_master {
+            log::info!("[Loop] View switched: {} -> {}, forcing 2 redraw frames", prev_is_master, is_master);
+            prev_is_master = is_master;
+            force_redraw_frames = 2;
+        }
+
+        if force_redraw_frames > 0 {
+            window.window().request_redraw();
+            force_redraw_frames -= 1;
+        }
+
         let current_snap = snapshot.read();
 
         if !is_master {
@@ -983,6 +1008,7 @@ async fn run_slave_demo_loop(
             slint::platform::update_timers_and_animations();
         }
 
+        let t_render_start = unsafe { esp_idf_sys::esp_timer_get_time() };
         let rendered = if is_master {
             platform::flush_to_lcd()
         } else {
@@ -994,11 +1020,15 @@ async fn run_slave_demo_loop(
                 gauge_renderer::draw_strobe_gauge(buf, stride, h, &gauge_params);
             })
         };
+        let t_render_dur = unsafe { esp_idf_sys::esp_timer_get_time() } - t_render_start;
+        if rendered && t_render_dur > 20_000 {
+            log::info!("[Perf] Render (is_master={}) took {} ms", is_master, t_render_dur / 1000);
+        }
 
         if !rendered {
-            FreeRtos::delay_ms(5);
+            FreeRtos::delay_ms(2);
         } else {
-            FreeRtos::delay_ms(20);
+            FreeRtos::delay_ms(1);
         }
 
         step = step.wrapping_add(1);
@@ -1032,6 +1062,8 @@ async fn run_slave_telemetry_loop(
         updated: true,
     }));
     let telemetry_clone = Arc::clone(&telemetry_state);
+    let mut prev_is_master = window.get_is_master_view();
+    let mut force_redraw_frames: u8 = 0;
 
     if let Some(uart) = uart_driver {
         log::info!("[Slave Telemetry] UART1 listening on TX=GPIO17, RX=GPIO18 at 115200 baud");
@@ -1086,33 +1118,38 @@ async fn run_slave_telemetry_loop(
     loop {
         // Poll Touchscreen and dispatch Slint Pointer events
         if let (Some(gt), Some(ref mut bus)) = (gt911, i2c.as_mut()) {
-            let touch_pt = gt.poll_touch(bus);
-            match (touch_pt, last_touch) {
-                (Some((x, y)), None) => {
-                    log::info!("[Touch] PointerPressed at ({}, {})", x, y);
-                    platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerPressed {
-                        position: slint::LogicalPosition::new(x as f32, y as f32),
-                        button: slint::platform::PointerEventButton::Left,
-                    });
-                    last_touch = Some((x, y));
-                }
-                (Some((x, y)), Some((prev_x, prev_y))) => {
-                    if (x as i32 - prev_x as i32).abs() > 1 || (y as i32 - prev_y as i32).abs() > 1 {
-                        platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerMoved {
-                            position: slint::LogicalPosition::new(x as f32, y as f32),
-                        });
-                        last_touch = Some((x, y));
+            match gt.poll_touch(bus) {
+                touch::TouchEvent::Pressed { x, y } => {
+                    match last_touch {
+                        None => {
+                            log::info!("[Touch] PointerPressed at ({}, {})", x, y);
+                            platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerPressed {
+                                position: slint::LogicalPosition::new(x as f32, y as f32),
+                                button: slint::platform::PointerEventButton::Left,
+                            });
+                            last_touch = Some((x, y));
+                        }
+                        Some((prev_x, prev_y)) => {
+                            if (x as i32 - prev_x as i32).abs() > 1 || (y as i32 - prev_y as i32).abs() > 1 {
+                                platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerMoved {
+                                    position: slint::LogicalPosition::new(x as f32, y as f32),
+                                });
+                                last_touch = Some((x, y));
+                            }
+                        }
                     }
                 }
-                (None, Some((prev_x, prev_y))) => {
-                    log::info!("[Touch] PointerReleased at ({}, {})", prev_x, prev_y);
-                    platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerReleased {
-                        position: slint::LogicalPosition::new(prev_x as f32, prev_y as f32),
-                        button: slint::platform::PointerEventButton::Left,
-                    });
-                    last_touch = None;
+                touch::TouchEvent::Released => {
+                    if let Some((prev_x, prev_y)) = last_touch {
+                        log::info!("[Touch] PointerReleased at ({}, {})", prev_x, prev_y);
+                        platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerReleased {
+                            position: slint::LogicalPosition::new(prev_x as f32, prev_y as f32),
+                            button: slint::platform::PointerEventButton::Left,
+                        });
+                        last_touch = None;
+                    }
                 }
-                (None, None) => {}
+                touch::TouchEvent::NoUpdate => {}
             }
         }
 
@@ -1149,6 +1186,17 @@ async fn run_slave_telemetry_loop(
         }
 
         let is_master = window.get_is_master_view();
+        if is_master != prev_is_master {
+            log::info!("[Telemetry Loop] View switched: {} -> {}, forcing 2 redraw frames", prev_is_master, is_master);
+            prev_is_master = is_master;
+            force_redraw_frames = 2;
+        }
+
+        if force_redraw_frames > 0 {
+            window.window().request_redraw();
+            force_redraw_frames -= 1;
+        }
+
         let rendered = if is_master {
             platform::flush_to_lcd()
         } else {
@@ -1162,9 +1210,9 @@ async fn run_slave_telemetry_loop(
         };
 
         if !rendered {
-            FreeRtos::delay_ms(5);
+            FreeRtos::delay_ms(2);
         } else {
-            FreeRtos::delay_ms(20);
+            FreeRtos::delay_ms(1);
         }
     }
 }
