@@ -20,3 +20,5 @@
 ## 4. Coding Standards
 - **No Panics in Production:** The use of `unwrap()`, `expect()`, or `panic!()` is strictly FORBIDDEN in production code. All errors must be handled properly using `Result`, custom error enums, and graceful degradation/logging.
 - **High Test Coverage:** For every new implementation or feature, you MUST add the corresponding unit tests AND update the integration tests accordingly. Maintaining a very high test coverage across both unit and integration tests is mandatory to ensure reliability.
+- **Mandatory Post-Implementation Grill:** Always execute a final adversarial code review pass ("Grill") right after implementation and before Gate 3 commit authorization. Actively probe for edge cases, subtle logic inversions (e.g. mute vs volume, polarity, inverted ranges), concurrency race conditions / queue saturations, and add missing unit tests accordingly.
+
