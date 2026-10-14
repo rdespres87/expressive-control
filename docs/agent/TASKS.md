@@ -46,11 +46,12 @@
     - 3 inputs for rotary encoder (Phase A, Phase B, Switch click)
     - 3 inputs for tactile control buttons
   - Auxiliary USB-MIDI interface selection: **RP2040-Zero** coprocessor configured as an I2C Target (@ `0x40`) / USB-MIDI Class-Compliant endpoint.
-- [ ] **Generic MCP23017 Expander & Composable Driver Architecture**:
+- [x] **Generic MCP23017 Expander & Composable Driver Architecture**:
   - Implement a generic, reusable MCP23017 driver on I2C (`0x20`) (`mcp23017.rs`).
   - Implement standalone composable peripheral drivers: `DebouncedButton`, `RotaryEncoder` (Gray-code quadrature with detent filter).
   - Implement sequential dual ToF boot controller (`XSHUT` lines on GPA0/GPA1 to re-address sensors to `0x30` and `0x31`).
-  - Implement Theremin front-panel driver composing buttons and encoder.
+  - Implement Theremin front-panel driver composing buttons (Octave +, Octave -, Mute) and rotary encoder (UI navigation).
+  - Implement resilient hardware-absent fallback with Slint UI warning banner.
 - [x] **RP2040-Zero Inter-MCU Protocol**: Validated I2C Target link (Slave @ `0x40`) at 400 kHz to prevent hardware UART0 / CH340G bus contention.
 - [ ] **USB-MIDI Firmware (RP2040-Zero)**:
   - Implement RP2040 I2C Target firmware receiving 3-byte MIDI packets and streaming Class-Compliant USB-MIDI to host DAW.

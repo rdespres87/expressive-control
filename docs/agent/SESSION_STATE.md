@@ -7,18 +7,26 @@ IN_PROGRESS
 V0.6 ToF Theremin Prototype (ESP32-S3 + CrowPanel 5.0" Slint UI)
 
 ## Current task
-MCP23017 I/O Expander driver grill, unit testing, and commit authorization.
+Dual VL53L4CD ToF sensor initialization, hardware-absent fallback, and front panel button mapping.
 
 ## Last completed
-- Performed an adversarial Grill on the expander and peripheral subsystem:
-  - Decoupled `mcp23017.rs` into a 100% pure, generic MCP23017 expander driver (registers, port/pin read/write, direction, pull-up, cached latch).
-  - Created standalone generic `button.rs` with a 3-sample integrator debouncer and edge detection (`is_pressed`, `just_pressed`, `just_released`).
-  - Created standalone generic `encoder.rs` implementing a 2-bit Gray-code state machine with 4-substep detent filter (EC11 standard) and bounce rejection.
-  - Created `front_panel.rs` assembling the generic expander, buttons, encoder, and dual ToF sequential reset controller for the Theremin application.
-  - Implemented exhaustive unit test suite across all 4 modules.
-  - Verified `cargo test --no-run` (0 warnings, 0 errors) and `cargo clippy --release --features demo -- -D warnings` (0 warnings).
-  - Verified 41 workspace unit tests pass.
+- Implemented resilient dual VL53L4CD sequential boot & dynamic address assignment (`0x30` Volume, `0x31` Pitch) via MCP23017 expander (`GPA0`/`GPA1`).
+- Implemented zero-panic fallback when hardware shield or ToF sensors are absent or disconnected.
+- Added Slint UI status warning banner at the bottom of the screen (`⚠ Périphériques non connectés (Mode Simulation)` in FR / `⚠ Peripherals disconnected (Simulation Mode)` in EN).
+- Configured physical front panel buttons per user specification:
+  - `GPA4`: Octave +
+  - `GPA5`: Octave -
+  - `GPA6`: Mute (audio output mute toggle)
+  - `GPB0`, `GPB1`, `GPB2`: Rotary encoder with push switch for UI view navigation.
+- Cleaned up all obsolete `unused_imports`, `unused_variables`, and `dead_code` attributes:
+  - Removed legacy unused TinyUSB FFI block and descriptors in `main.rs`.
+  - Removed `#[allow(unused_variables)]` and `#![allow(dead_code)]` from `platform.rs`.
+  - Removed obsolete `harness = false` in `Cargo.toml`, eliminating 7 fake unused test import warnings.
+  - Refactored `gauge_renderer.rs` with domain structures (`Point2D`, `LineSegment`, `CircularArc`, `FilledCircle`) and enums (`TickKind`, `TuningStatus`), eliminating `#[allow(clippy::too_many_arguments)]` and fixing the dot rendering early-exit bug.
+- Verified on host CI: 41 workspace tests passing, clippy clean (`-D warnings`), cargo fmt clean.
+- Successfully flashed to ESP32-S3 CrowPanel 5.0" via `/dev/cu.usbserial-1420` and verified clean boot with simulation fallback active.
 
 ## Next action
-- Implement the RP2040-Zero USB-MIDI coprocessor firmware (I2C Target @ 0x40 -> USB-MIDI Class Compliant).
+- Finalize git commit of the verified hardware-absent resilient ToF initialization, front panel buttons, and cleanups (Security Gate 3).
+- Implement RP2040-Zero USB-MIDI coprocessor firmware (I2C Target @ 0x40 -> USB-MIDI Class Compliant).
 
