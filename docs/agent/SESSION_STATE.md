@@ -21,6 +21,7 @@ Hardware-in-the-Loop validation of real-time dual-core performance and RP2040-Ze
   - Bench verified on physical CrowPanel 5.0" LCD: ultra-fluid Strobe Tuner needle animation and responsive touch.
 
 ## Next action
+- Physical Navigation & Focus Management in Slint UI (rotary encoder navigation/edit modes and hardware button shortcuts).
 - Implement Didactic Web Flasher (WebSerial) for one-click USB firmware update in Chrome/Edge.
 - Bench validation of ToF distance sensors (VL53L4CD) on physical CrowPanel I2C bus.
 

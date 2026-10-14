@@ -63,6 +63,11 @@
 ### Interface & Ergonomics (Slint UI)
 - [x] **Unified Master / Slave UI (Single-Screen)**: Dynamic switchable view toggling between Master view (Root, Scale, Octave, PB range, Quantization, Filter speed) and Slave view (Strobe Tuner) via touch buttons (`CONFIG` / `TUNER`) with direct local `TofThereminProcessor` sync.
 - [x] **Internationalization (i18n)**: Zero-allocation static string table in Rust (`i18n.rs`) with interactive `[ FR / EN ]` toggle on Slint UI.
+- [ ] **Physical Navigation & Focus Management (Rotary Encoder & Hardware Buttons)**:
+  - Implement visual focus outline / highlight in Slint UI (`master.slint`) indicating the currently selected parameter card.
+  - Dual-mode encoder interaction: **Navigate mode** (rotate to cycle through parameter cards: Root, Scale, Octave, Range, PB Range, Quantization, Filter, MIDI Mode) and **Edit mode** (click to activate, rotate to adjust value, click to confirm).
+  - Hardware buttons integration: dedicated Octave + / Octave - quick-shifting and instant Mute toggle with tactile visual feedback on UI.
+  - Tuner view navigation: encoder rotation for reference pitch calibration (e.g. 440 Hz ± 10 Hz) and click to toggle between Master and Tuner views.
 
 ### System, Deployment & Tools
 - [x] **Firmware Update Strategy (Unified CrowPanel USB -> RP2040 I2C ISP)**:
