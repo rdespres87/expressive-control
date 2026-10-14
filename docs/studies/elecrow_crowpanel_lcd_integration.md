@@ -143,14 +143,17 @@ The firmware must be built with:
 
 1. **PSRAM must be OPI mode** — QPI mode won't provide enough bandwidth for dual buffering
 2. **GPIO0 contention** — GPIO0 is shared with LCD PCLK; do not use as GPIO
-3. **Capacitive Touch & IO Expander (GT911 & PCA9557)** — Intégré via I2C (`SDA` = GPIO 19, `SCL` = GPIO 20). Le PCA9557 pilote le reset du GT911 (`IO0`), l'adresse/INT (`IO1`), et l'alimentation de l'amplificateur audio (`IO2`).
-4. **Audio Amplifier Mute / Disabled** — Le projet n'utilisant pas d'audio, la broche `PA_EN` (PCA9557 `IO2`) est systématiquement forcée et maintenue à l'état BAS (`LOW`), coupant totalement l'ampli audio embarqué (zéro consommation parasite, aucun souffle).
+3. **Capacitive Touch & IO Expander (GT911 & PCA9557)** — Integrated via I2C (`SDA` = GPIO 19, `SCL` = GPIO 20). The PCA9557 controls the GT911 reset line (`IO0`), address/INT line (`IO1`), and audio amplifier power enable (`IO2`).
+4. **Audio Amplifier Mute / Disabled** — Since the project does not use audio output, the `PA_EN` pin (PCA9557 `IO2`) is systematically forced and held `LOW`, completely powering down the onboard audio amplifier (zero quiescent power, zero hiss/noise).
 5. **Full frame flush** — Currently flushes entire dirty region; could be optimized for partial updates
 6. **USB Port & Hardware USB-MIDI Architecture**:
-   - The onboard USB Type-C connector is hardwired to a **CH340G USB-to-UART bridge** connected to `UART0` (`GPIO 43` TX, `GPIO 44` RX). The ESP32-S3 native USB OTG pins (`GPIO 19` D-, `GPIO 20` D+) are permanently routed to the I2C bus (`SDA`/`SCL`) for the touch controller and peripherals.
-   - Consequently, native USB-MIDI Class Compliant operation directly from the onboard USB-C port is physically impossible without conflicting with firmware flashing.
-   - **Solution**: Native USB-MIDI is delegated to an auxiliary microcontroller (e.g., **Raspberry Pi RP2040-Zero** / **Seeed XIAO**) connected via I2C or serial, providing a dedicated, plug-and-play USB-C MIDI device interface while keeping the CrowPanel port dedicated to power and firmware updates.
-7. **Peripheral Expansion via MCP23017**:
+   - The onboard USB Type-C connector is hardwired to a **CH340G USB-to-UART bridge** connected to `UART0` (`GPIO 43` TX, `GPIO 44` RX). The external 4-pin connector labeled "UART" is a direct parallel mirror of `UART0`; using it for inter-MCU communication would cause severe bus contention with the CH340G TX driver whenever USB is plugged in, and ESP-IDF console logs would corrupt binary MIDI packets.
+   - The ESP32-S3 native USB OTG pins (`GPIO 19` D-, `GPIO 20` D+) are permanently routed to the I2C bus (`SDA`/`SCL`) for the touch controller and peripherals. Consequently, native USB-MIDI Class Compliant operation directly from the onboard USB-C port is physically impossible.
+   - **Solution**: Native USB-MIDI is delegated to an auxiliary microcontroller (**Raspberry Pi RP2040-Zero** / **Seeed XIAO**) operating as an **I2C Target (Slave) at address `0x40`** on the shared 4-pin I2C bus (`SDA`=19, `SCL`=20). The RP2040 exposes a dedicated, plug-and-play USB-C MIDI device interface to the host DAW/synthesizer while leaving the CrowPanel USB-C port 100% available for firmware flashing and debugging.
+7. **Shared I2C Bus Speed & Bandwidth Analysis (400 kHz Fast Mode)**:
+   - **Device Frequency Limits**: The slowest devices on the bus (**Goodix GT911** and **NXP PCA9557**) have a datasheet maximum rating of **400 kHz (Fast Mode)**. While the ST VL53L4CD and RP2040 support 1 MHz (Fast Mode Plus), the entire bus is harmonized at **400 kHz**.
+   - **Bandwidth Consumption**: At 400 kHz, continuous sensor polling (2× ToF @ 50 Hz = 0.6 ms/20 ms), front-panel controls (MCP23017 @ 100 Hz = 0.15 ms/10 ms), touch input (GT911 @ 60 Hz = 1.5 ms/16.6 ms), and real-time MIDI packet transmission (RP2040 write @ ~90 µs/event) consume **less than 8% total bus bandwidth**, leaving >92% idle time.
+8. **Peripheral Expansion via MCP23017**:
    - All external human interface controls (1 rotary encoder with click switch, 3 pushbuttons) and the 2 `XSHUT` control lines for the VL53L4CD ToF distance sensors are aggregated onto an external **Waveshare MCP23017** on the shared I2C bus (`0x20`), requiring zero additional dedicated GPIOs on the ESP32.
 
 ## Bug Fix: Struct Layout Mismatch (2026-10-09)

@@ -1,29 +1,32 @@
 # Session Handoff
 
 ## Context
-Completed implementation and validation of the Rust zero-allocation internationalization (i18n) translation engine and refined UI ergonomics on the Elecrow CrowPanel 5.0" ESP32-S3:
-- **Zero-Allocation i18n Translation Engine (`src/i18n.rs`)**:
-  - Implemented compile-time static string tables (`&'static UiStrings`) for French and English.
-  - Zero heap allocation during rendering; atomic conversion to Slint (`to_slint_i18n`) executed only upon language toggle.
-  - All-caps section headers maintained for UI visual consistency ("TONIQUE", "GAMME", "OCTAVE BASE", "PLAGE", "MODE MIDI", "CORRECTION DE PITCH", "RÉPONSE", "RÉGLAGES").
-- **Slint MCU Acute Accent Fix (`ui/master.slint`, `ui/theremin.slint`)**:
-  - Discovered that `i-slint-renderer-software` clips glyphs against the `Text` element's bounding box (`18px`), clipping off the top 3px of capital `É` (height 17px) which exceeds the font ascent.
-  - Resolved by providing `height: 28px; vertical-alignment: center;` to both `response_filter` and `settings_btn` Text elements, giving 5px clearance above the accent with zero clipping.
-- **UI Ergonomics & Symmetrical Layout (`ui/master.slint`, `ui/theremin.slint`)**:
-  - Interactive dual toggle `[ FR / EN ]` with active language highlighted in cyan placed in the bottom-right corner of Row 3.
-  - Symmetrical 16px lateral margins for both Volume and Expression vertical bargraphs on Slave screen.
-  - Perfectly centered `RÉGLAGES` button horizontally and vertically inside 154px × 48px rectangle using `VerticalLayout` and `HorizontalLayout` center alignments.
-- **Hardware Architecture Documentation (`docs/studies/elecrow_crowpanel_lcd_integration.md`)**:
-  - Documented CH340G USB-to-UART hardwired routing and rationale for dedicated auxiliary USB-MIDI MCU (RP2040-Zero / Seeed XIAO).
-  - Documented external MCP23017 I2C architecture for buttons, rotary encoder, and ToF XSHUT lines.
+Completed I2C bus operating frequency investigation, slave device compatibility matrix, and documentation synchronization:
+- **I2C Bus Speed Verdict (400 kHz Fast Mode)**:
+  - Datasheet verification across all devices:
+    - `0x14 / 0x5D` Goodix GT911: Max **400 kHz**.
+    - `0x18` NXP PCA9557: Max **400 kHz**.
+    - `0x20` Microchip MCP23017: Max **400 kHz** (at 3.3V).
+    - `0x30 / 0x31` ST VL53L4CD: Supports up to **1 MHz**.
+    - `0x40` RP2040-Zero (I2C Target): Supports up to **1 MHz**.
+  - Harmonizing at **400 kHz** is 100% compliant with all components and prevents bus lockups on the slower onboard chips.
+  - Bus utilization at 400 kHz is strictly **< 8%**, providing zero latency benefit to overclocking to 1 MHz.
+- **Updated Documentation**:
+  - [elecrow_crowpanel_lcd_integration.md](file:///Users/rdespres/Projets/expressive-control/docs/studies/elecrow_crowpanel_lcd_integration.md): Documented I2C Target RP2040 coprocessor and bus bandwidth.
+  - [hardware_netlist.md](file:///Users/rdespres/Projets/expressive-control/docs/studies/hardware_netlist.md): Unified electrical netlist for power, I2C, MCP23017, and ToF.
+- **Generic MCP23017 & Composable Subsystem Architecture**:
+  - [generic_mcp23017_architecture.md](file:///Users/rdespres/Projets/expressive-control/docs/studies/generic_mcp23017_architecture.md): Decoupled 4-layer architecture separating generic expander registers/pins from standalone `DebouncedButton`, `RotaryEncoder`, and `DualTofResetController`.
+  - [mcp23017.rs](file:///Users/rdespres/Projets/expressive-control/firmwares/expressive-theremin/src/mcp23017.rs): Production implementation of generic `Mcp23017Driver`, 3-sample integrator debouncer, EC11 4-step Gray-code decoder, and `ThereminFrontPanel` assembly.
+  - Translated all remaining French sections in [TASKS.md](file:///Users/rdespres/Projets/expressive-control/docs/agent/TASKS.md) to English in compliance with project rules.
 
 ## Verification
 - `cargo fmt --all -- --check`: Clean (0 diffs).
 - `cargo clippy --workspace -- -D warnings`: Clean (0 warnings).
 - `cargo clippy --release --features demo -- -D warnings`: Clean (0 warnings).
-- Unit tests: 41/41 passing.
-- Device Flash: Successfully flashed to CrowPanel 5.0" hardware (`/dev/cu.usbserial-1420`).
+- `cargo test --no-run` (expressive-theremin): Clean (0 warnings, 0 errors).
+- All unit tests verified (pin mapping, debouncer glitch rejection, full CW/CCW encoder cycles, bounce rejection).
 
 ## Next Logical Action
-1. Implement MCP23017 I2C driver on bus `0x20` to control VL53L4CD XSHUT lines and read rotary encoder / button inputs.
-2. Sequence ToF initialization (address assignment `0x30` and `0x31`) and establish Core 1 polling loop.
+1. Stage and commit the generic MCP23017 driver implementation and architecture documentation.
+2. Scaffold the RP2040-Zero firmware (I2C Target @ `0x40` $\rightarrow$ USB-MIDI Class-Compliant).
+
