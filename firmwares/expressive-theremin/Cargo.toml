@@ -11,10 +11,10 @@ name = "expressive-theremin"
 
 [features]
 # Base firmware modes
-default = ["master"]
+default = ["single-screen"]
+single-screen = []
 master = []
 slave = []
-demo = ["slave"]
 
 [dependencies]
 log = "0.4"

@@ -34,26 +34,25 @@ pub mod touch;
 /// Defines the hardware architecture the firmware is built for.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ThereminMode {
-    /// Legacy mode: One board reads both sensors and handles everything.
-    SingleBoard,
-    /// Dual-board: This board is the "Master". It reads BOTH Volume and Pitch ToFs,
-    /// ensures perfect synchronization, outputs USB MIDI, and sends UI telemetry via UART.
+    /// Single-screen standalone instrument (CrowPanel 5.0" RGB LCD):
+    /// Reads both Volume and Pitch ToF sensors, renders the unified Slint UI
+    /// (Master configuration & Strobe Tuner), processes musical MPE DSP, and handles
+    /// front-panel physical controls (buttons and rotary encoder).
+    SingleScreen,
+    /// Dual-board legacy: Master board (audio engine & sensors).
     MasterBoard,
-    /// Dual-board: This board is the "Slave" (Pitch display). It reads no sensors,
-    /// but receives UI telemetry via UART to render the Strobe Tuner in real-time.
+    /// Dual-board legacy: Slave board (remote display listener via UART).
     SlaveBoard,
-    /// Autonomous Demo / Test mode for the Strobe Tuner display on CrowPanel 5.0".
-    SlaveDemo,
 }
 
 /// Change this constant or feature to build for the desired board mode.
-#[cfg(feature = "demo")]
-const BOARD_MODE: ThereminMode = ThereminMode::SlaveDemo;
+#[cfg(feature = "single-screen")]
+const BOARD_MODE: ThereminMode = ThereminMode::SingleScreen;
 
-#[cfg(all(feature = "slave", not(feature = "demo")))]
+#[cfg(all(feature = "slave", not(feature = "single-screen")))]
 const BOARD_MODE: ThereminMode = ThereminMode::SlaveBoard;
 
-#[cfg(all(not(feature = "slave"), not(feature = "demo")))]
+#[cfg(all(not(feature = "slave"), not(feature = "single-screen")))]
 const BOARD_MODE: ThereminMode = ThereminMode::MasterBoard;
 
 /// Default 7-bit I2C address of a VL53L4CD after power-up.
@@ -521,16 +520,17 @@ async fn comms_loop(
     Ok(())
 }
 
-// --- Slave mode: Autonomous demo & telemetry visualizer ---
+// --- Display Engine: Single-Screen Standalone Instrument & Slave Telemetry ---
 
-async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
-    log::info!(
-        "=== Starting in SLAVE mode (Strobe Tuner Display) [demo_mode = {}] ===",
-        is_demo
-    );
+async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareError> {
+    if is_single_screen {
+        log::info!("=== Starting in SINGLE-SCREEN mode (Standalone Expressive Theremin) ===");
+    } else {
+        log::info!("=== Starting in SLAVE mode (Remote Strobe Tuner Display via UART) ===");
+    }
 
     // Initialize LCD display (Elecrow CrowPanel 5.0" RGB LCD)
-    log::info!("[Slave] Initializing LCD display...");
+    log::info!("[Display] Initializing LCD display...");
     if !platform::init_lcd() {
         log::warn!("LCD initialization failed, UI will not display");
     } else {
@@ -589,8 +589,8 @@ async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
             }
         }
 
-        // 2. Initialize UART1 if in normal Slave telemetry mode
-        if !is_demo {
+        // 2. Initialize UART1 if in dual-board Slave telemetry mode
+        if !is_single_screen {
             let uart_config = esp_idf_hal::uart::UartConfig::new().baudrate(115200.into());
             match esp_idf_hal::uart::AsyncUartDriver::new(
                 peripherals.uart1,
@@ -887,9 +887,9 @@ async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
     platform::set_backlight(true);
     log::info!("[UI] Backlight enabled (initial UI painted, zero flash)");
 
-    if is_demo {
-        log::info!("[UI] Running autonomous demo/test animation loop with touch...");
-        run_slave_demo_loop(
+    if is_single_screen {
+        log::info!("[UI] Running single-screen instrument loop with touch & front panel...");
+        run_single_screen_loop(
             &window,
             i2c_bus_opt.as_ref(),
             gt911_opt.as_ref(),
@@ -907,9 +907,9 @@ async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
     Ok(())
 }
 
-/// Autonomous test/demo animation loop with live touch interaction, front panel inputs,
-/// and resilient live ToF / synthetic simulation integration.
-async fn run_slave_demo_loop<'a>(
+/// Single-screen standalone instrument loop with live touch interaction, front panel inputs,
+/// and dual ST VL53L4CD ToF sensors (or resilient fallback simulation).
+async fn run_single_screen_loop<'a>(
     window: &MainWindow,
     bus: Option<&'a I2cBus>,
     gt911: Option<&touch::Gt911Driver>,
@@ -1358,8 +1358,8 @@ fn main() {
 
     let app_future = async {
         match BOARD_MODE {
-            ThereminMode::SlaveDemo => run_slave(true).await,
-            ThereminMode::SlaveBoard => run_slave(false).await,
+            ThereminMode::SingleScreen => run_display_instrument(true).await,
+            ThereminMode::SlaveBoard => run_display_instrument(false).await,
             _ => run_master_3_threads().await,
         }
     };

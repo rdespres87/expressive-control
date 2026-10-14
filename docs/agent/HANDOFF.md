@@ -22,15 +22,16 @@ Completed dual ST VL53L4CD Time-of-Flight (ToF) initialization, resilient hardwa
 ## Verification
 - `cargo fmt --all -- --check`: Clean (0 diffs).
 - `cargo clippy --workspace -- -D warnings`: Clean (0 warnings).
-- `cargo clippy --release --features demo -- -D warnings`: Clean (0 warnings).
-- `cargo clippy --tests --features demo -- -D warnings`: Clean (0 warnings).
+- `cargo clippy --release -- -D warnings`: Clean (0 warnings, `single-screen` default).
+- `cargo clippy --tests -- -D warnings`: Clean (0 warnings).
 - All 41 workspace unit tests passing.
 - Cleaned all obsolete `#[allow(unused_...)]` and `#[allow(dead_code)]` attributes.
 - Refactored `gauge_renderer.rs` with domain structures (`Point2D`, `LineSegment`, `CircularArc`, `FilledCircle`) and enums (`TickKind`, `TuningStatus`), eliminating `#[allow(clippy::too_many_arguments)]` and fixing the dot rendering bug.
+- Established `single-screen` as default primary architecture for CrowPanel 5.0".
 - Live flashing on ESP32-S3 CrowPanel 5.0" via `/dev/cu.usbserial-1420`: Boot validated, absence detected cleanly, simulation running with zero flash backlight and red warning banner displayed.
 
 ## Next Logical Action
-1. Finalize git commit of the verified changes (Security Gate 3).
+1. Finalize git commit of the `single-screen` architecture changes (Security Gate 3).
 2. Implement the RP2040-Zero firmware (I2C Target @ `0x40` $\rightarrow$ USB-MIDI Class-Compliant endpoint).
 3. Wire real-time distance and front-panel polling loops on ESP32 Core 1.
 
