@@ -16,6 +16,7 @@ Hardware-in-the-Loop validation of real-time dual-core performance and RP2040-Ze
 - Synchronized and updated `README.md` to reflect current multi-crate architecture, CrowPanel 5.0" dual-core implementation, and RP2040 coprocessor (commit `2a0cddc`).
 
 ## Next action
-- Bench flash RP2040-Zero via USB-C mass-storage (`RPI-RP2`) using `rp2040-i2c-bootloader.uf2`.
-- Connect RP2040-Zero I2C lines to CrowPanel 5.0" (`GPIO 19` SDA, `GPIO 20` SCL) and verify live bootloader handshake and OTA flashing over I2C.
+- Slint Graphic Rendering Performance Optimization on CrowPanel 5.0" (FreeRTOS ISR VSYNC, vector gauge caching, zero-heap UI diffing).
+- Implement Didactic Web Flasher (WebSerial) for one-click USB update in Chrome/Edge.
+- Bench validation of ToF distance sensors (VL53L4CD) on physical CrowPanel I2C bus.
 
