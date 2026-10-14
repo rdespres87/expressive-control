@@ -9,6 +9,7 @@ export component MainWindow inherits Window {
     title: "Expressive Theremin";
 
     in-out property <bool> is_master_view: true;
+    in-out property <bool> hardware_connected: false;
 
     // Slave (Tuner) Properties
     in-out property <string> note_name: "C";
@@ -109,6 +110,19 @@ export component MainWindow inherits Window {
             root.is_master_view = false;
             root.view_switched(false);
         }
+    }
+
+    // Disconnected hardware indicator banner (visible at the bottom of the screen)
+    hardware_warning := Text {
+        x: 0px;
+        y: root.height - 22px;
+        width: 100%;
+        horizontal-alignment: center;
+        text: root.i18n.hardware_disconnected;
+        color: #ff4d4d;
+        font-size: 13px;
+        font-weight: 700;
+        visible: !root.hardware_connected;
     }
 }
 

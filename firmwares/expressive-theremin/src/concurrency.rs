@@ -118,7 +118,6 @@ pub fn create_config_channel(
 }
 
 #[cfg(test)]
-#[allow(unused_imports)]
 mod tests {
     use super::*;
     use expressive_core::processor::{RootNote, Scale};

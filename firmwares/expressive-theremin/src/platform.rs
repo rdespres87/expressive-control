@@ -5,9 +5,6 @@
 //! - DRAM bounce buffer for smooth DMA transfers
 //! - VSYNC callback synchronization
 //! - Slint MinimalSoftwareWindow with SwappedBuffers
-
-#![allow(dead_code)]
-
 use crate::MainWindow;
 use core::ffi::c_void;
 use std::rc::Rc;
@@ -59,16 +56,15 @@ pub fn update_sensor_state(state: SensorState) {
 }
 
 pub fn poll_ui_updates(_window_weak: &slint::Weak<MainWindow>) {
-    #[allow(unused_variables)]
-    let state = {
+    let _state = {
         let guard = G_SENSOR_STATE.lock().unwrap_or_else(|e| e.into_inner());
         guard.clone()
     };
     log::trace!(
         "[poll_ui_updates] Sensor state: pitch_dist={}, vol_dist={}, is_playing={}",
-        state.pitch_distance,
-        state.volume_distance,
-        state.is_playing
+        _state.pitch_distance,
+        _state.volume_distance,
+        _state.is_playing
     );
 }
 

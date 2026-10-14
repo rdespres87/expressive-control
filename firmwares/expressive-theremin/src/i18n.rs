@@ -34,6 +34,7 @@ pub struct UiStrings {
     pub filter_fast: &'static str,
     pub settings_btn: &'static str,
     pub transpose: &'static str,
+    pub hardware_disconnected: &'static str,
     pub is_french: bool,
 }
 
@@ -58,6 +59,7 @@ pub const STRINGS_FR: UiStrings = UiStrings {
     filter_fast: "Rapide",
     settings_btn: "RÉGLAGES",
     transpose: "TRANSPOSITION: ",
+    hardware_disconnected: "⚠ Périphériques non connectés (Mode Simulation)",
     is_french: true,
 };
 
@@ -82,6 +84,7 @@ pub const STRINGS_EN: UiStrings = UiStrings {
     filter_fast: "Fast",
     settings_btn: "SETTINGS",
     transpose: "TRANSPOSE: ",
+    hardware_disconnected: "⚠ Peripherals disconnected (Simulation Mode)",
     is_french: false,
 };
 
@@ -116,12 +119,12 @@ pub fn to_slint_i18n(strings: &'static UiStrings) -> UiI18n {
         filter_fast: strings.filter_fast.into(),
         settings_btn: strings.settings_btn.into(),
         transpose: strings.transpose.into(),
+        hardware_disconnected: strings.hardware_disconnected.into(),
         is_french: strings.is_french,
     }
 }
 
 #[cfg(test)]
-#[allow(unused_imports)]
 mod tests {
     use super::{get_ui_strings, to_slint_i18n, Language};
 
@@ -138,6 +141,7 @@ mod tests {
             assert!(!s.tuner_btn.is_empty());
             assert!(!s.live_view.is_empty());
             assert!(!s.base_octave.is_empty());
+            assert!(!s.hardware_disconnected.is_empty());
             assert!(!s.octave_range.is_empty());
             assert!(!s.midi_mode.is_empty());
             assert!(!s.pb_range.is_empty());

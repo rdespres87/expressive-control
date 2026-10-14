@@ -54,12 +54,12 @@ All front-panel physical controls use the internal 100kΩ pull-up resistors of t
 
 | Source (Component) | Destination (MCP23017) | Target Pin | Electrical Type | Function |
 | :--- | :--- | :--- | :--- | :--- |
-| Rotary Encoder EC11 (`CLK` / A) | MCP23017 Port B | `GPB0` | Input (Pull-up) | Quadrature Phase A |
-| Rotary Encoder EC11 (`DT` / B)  | MCP23017 Port B | `GPB1` | Input (Pull-up) | Quadrature Phase B |
-| Rotary Encoder EC11 (`SW`)      | MCP23017 Port B | `GPB2` | Input (Pull-up) | Pushbutton click to select |
-| Action Button 1 (Preset +)      | MCP23017 Port A | `GPA4` | Input (Pull-up) | Next preset (to GND) |
-| Action Button 2 (Preset -)      | MCP23017 Port A | `GPA5` | Input (Pull-up) | Previous preset (to GND) |
-| Action Button 3 (Octave Shift)  | MCP23017 Port A | `GPA6` | Input (Pull-up) | Octave jump (to GND) |
+| Rotary Encoder EC11 (`CLK` / A) | MCP23017 Port B | `GPB0` | Input (Pull-up) | Quadrature Phase A (UI navigation) |
+| Rotary Encoder EC11 (`DT` / B)  | MCP23017 Port B | `GPB1` | Input (Pull-up) | Quadrature Phase B (UI navigation) |
+| Rotary Encoder EC11 (`SW`)      | MCP23017 Port B | `GPB2` | Input (Pull-up) | Pushbutton click to toggle UI View / Select (to GND) |
+| Action Button 1 (Octave +)      | MCP23017 Port A | `GPA4` | Input (Pull-up) | Increment base octave (to GND) |
+| Action Button 2 (Octave -)      | MCP23017 Port A | `GPA5` | Input (Pull-up) | Decrement base octave (to GND) |
+| Action Button 3 (Mute)          | MCP23017 Port A | `GPA6` | Input (Pull-up) | Toggle audio output mute (to GND) |
 
 ---
 

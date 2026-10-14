@@ -4,12 +4,12 @@
 //! and standalone `RotaryEncoder` to the physical pins of the CrowPanel 5.0" ToF Theremin:
 //! - `GPA0`: Left ToF XSHUT (Output)
 //! - `GPA1`: Right ToF XSHUT (Output)
-//! - `GPA4`: Preset Up button (Input, Pull-up, Active LOW)
-//! - `GPA5`: Preset Down button (Input, Pull-up, Active LOW)
-//! - `GPA6`: Octave shift button (Input, Pull-up, Active LOW)
+//! - `GPA4`: Octave + button (Input, Pull-up, Active LOW)
+//! - `GPA5`: Octave - button (Input, Pull-up, Active LOW)
+//! - `GPA6`: Mute button (Input, Pull-up, Active LOW)
 //! - `GPB0`: Rotary Encoder CLK (Input, Pull-up)
 //! - `GPB1`: Rotary Encoder DT (Input, Pull-up)
-//! - `GPB2`: Rotary Encoder Switch (Input, Pull-up, Active LOW)
+//! - `GPB2`: Rotary Encoder Switch / Click for UI navigation (Input, Pull-up, Active LOW)
 
 use esp_idf_hal::delay::FreeRtos;
 use esp_idf_hal::i2c::I2cDriver;
@@ -22,13 +22,13 @@ use crate::mcp23017::{Direction, Mcp23017Driver, Pin, Port, MCP23017_DEFAULT_ADD
 /// Aggregated front-panel readings and edge events.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FrontPanelEvent {
-    pub btn_preset_up: bool,
-    pub btn_preset_down: bool,
-    pub btn_octave: bool,
+    pub btn_mute: bool,
+    pub btn_octave_up: bool,
+    pub btn_octave_down: bool,
     pub encoder_switch: bool,
-    pub just_preset_up: bool,
-    pub just_preset_down: bool,
-    pub just_octave: bool,
+    pub just_mute: bool,
+    pub just_octave_up: bool,
+    pub just_octave_down: bool,
     pub just_encoder_switch: bool,
     pub encoder_delta: i32,
 }
@@ -88,9 +88,9 @@ impl DualTofResetController {
 pub struct ThereminFrontPanel {
     pub expander: Mcp23017Driver,
     pub tof_controller: DualTofResetController,
-    pub btn_preset_up: DebouncedButton,
-    pub btn_preset_down: DebouncedButton,
-    pub btn_octave: DebouncedButton,
+    pub btn_octave_up: DebouncedButton,
+    pub btn_octave_down: DebouncedButton,
+    pub btn_mute: DebouncedButton,
     pub btn_encoder_sw: DebouncedButton,
     pub encoder: RotaryEncoder,
 }
@@ -106,9 +106,9 @@ impl ThereminFrontPanel {
         Self {
             expander: Mcp23017Driver::new(addr),
             tof_controller: DualTofResetController::new(Pin::A0, Pin::A1),
-            btn_preset_up: DebouncedButton::new(),
-            btn_preset_down: DebouncedButton::new(),
-            btn_octave: DebouncedButton::new(),
+            btn_octave_up: DebouncedButton::new(),
+            btn_octave_down: DebouncedButton::new(),
+            btn_mute: DebouncedButton::new(),
             btn_encoder_sw: DebouncedButton::new(),
             encoder: RotaryEncoder::new(),
         }
@@ -145,14 +145,14 @@ impl ThereminFrontPanel {
         let portb = self.expander.read_port(i2c, Port::B)?;
 
         // Active LOW inputs: bit = 0 means button is pressed
-        let raw_up = (porta & Pin::A4.mask()) == 0;
-        let raw_down = (porta & Pin::A5.mask()) == 0;
-        let raw_oct = (porta & Pin::A6.mask()) == 0;
+        let raw_oct_up = (porta & Pin::A4.mask()) == 0;
+        let raw_oct_down = (porta & Pin::A5.mask()) == 0;
+        let raw_mute = (porta & Pin::A6.mask()) == 0;
         let raw_sw = (portb & Pin::B2.mask()) == 0;
 
-        let up_state = self.btn_preset_up.update(raw_up);
-        let down_state = self.btn_preset_down.update(raw_down);
-        let oct_state = self.btn_octave.update(raw_oct);
+        let oct_up_state = self.btn_octave_up.update(raw_oct_up);
+        let oct_down_state = self.btn_octave_down.update(raw_oct_down);
+        let mute_state = self.btn_mute.update(raw_mute);
         let sw_state = self.btn_encoder_sw.update(raw_sw);
 
         let clk = (portb & Pin::B0.mask()) != 0;
@@ -160,13 +160,13 @@ impl ThereminFrontPanel {
         let encoder_delta = self.encoder.update(clk, dt);
 
         Ok(FrontPanelEvent {
-            btn_preset_up: up_state.is_pressed,
-            btn_preset_down: down_state.is_pressed,
-            btn_octave: oct_state.is_pressed,
+            btn_mute: mute_state.is_pressed,
+            btn_octave_up: oct_up_state.is_pressed,
+            btn_octave_down: oct_down_state.is_pressed,
             encoder_switch: sw_state.is_pressed,
-            just_preset_up: up_state.just_pressed,
-            just_preset_down: down_state.just_pressed,
-            just_octave: oct_state.just_pressed,
+            just_mute: mute_state.just_pressed,
+            just_octave_up: oct_up_state.just_pressed,
+            just_octave_down: oct_down_state.just_pressed,
             just_encoder_switch: sw_state.just_pressed,
             encoder_delta,
         })
@@ -174,20 +174,19 @@ impl ThereminFrontPanel {
 }
 
 #[cfg(test)]
-#[allow(unused_imports)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_front_panel_event_default_state() {
         let ev = FrontPanelEvent::default();
-        assert!(!ev.btn_preset_up);
-        assert!(!ev.btn_preset_down);
-        assert!(!ev.btn_octave);
+        assert!(!ev.btn_mute);
+        assert!(!ev.btn_octave_up);
+        assert!(!ev.btn_octave_down);
         assert!(!ev.encoder_switch);
-        assert!(!ev.just_preset_up);
-        assert!(!ev.just_preset_down);
-        assert!(!ev.just_octave);
+        assert!(!ev.just_mute);
+        assert!(!ev.just_octave_up);
+        assert!(!ev.just_octave_down);
         assert!(!ev.just_encoder_switch);
         assert_eq!(ev.encoder_delta, 0);
     }

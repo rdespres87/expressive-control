@@ -103,10 +103,10 @@ An I/O expander is a generic hardware component (16 general-purpose digital I/O 
 
 ### 3.5 Application Front-Panel Assembly (`mcp23017/front_panel.rs`)
 * Glues the components together for the Theremin:
-  - Button 1: Preset Up (`GPA4`)
-  - Button 2: Preset Down (`GPA5`)
-  - Button 3: Octave Shift (`GPA6`)
-  - Rotary Encoder: CLK (`GPB0`), DT (`GPB1`), Pushbutton (`GPB2`)
+  - Button 1: Octave + (`GPA4`)
+  - Button 2: Octave - (`GPA5`)
+  - Button 3: Mute (`GPA6`)
+  - Rotary Encoder: CLK (`GPB0`), DT (`GPB1`), Pushbutton (`GPB2`) for UI navigation
   - ToF Reset Lines: Volume (`GPA0`), Pitch (`GPA1`)
 * Performs burst reads of Port A and Port B in a single atomic I2C transaction to minimize bus traffic.
 

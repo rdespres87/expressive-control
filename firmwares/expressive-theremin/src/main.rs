@@ -3,7 +3,6 @@ use core::fmt;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
-#[allow(unused_imports)]
 use crate::protocol::{MasterMessage, TunerState, MAX_MESSAGE_SIZE};
 use embedded_hal_async::i2c::I2c as _;
 use esp_idf_hal::delay::FreeRtos;
@@ -20,8 +19,6 @@ use theremin::TofThereminProcessor;
 
 // Slint UI is always compiled.
 slint::include_modules!();
-#[allow(dead_code)]
-type ThereminUi = MainWindow;
 
 pub mod button;
 pub mod concurrency;
@@ -60,27 +57,21 @@ const BOARD_MODE: ThereminMode = ThereminMode::SlaveBoard;
 const BOARD_MODE: ThereminMode = ThereminMode::MasterBoard;
 
 /// Default 7-bit I2C address of a VL53L4CD after power-up.
-#[allow(dead_code)]
 const VL53L4CD_DEFAULT_ADDR: u8 = 0x29;
 /// 7-bit I2C address assigned to the volume sensor during the sequential boot.
-#[allow(dead_code)]
-const VOLUME_SENSOR_ADDR: u8 = 0x2A;
+const VOLUME_SENSOR_ADDR: u8 = 0x30;
+/// 7-bit I2C address assigned to the pitch sensor during the sequential boot.
+const PITCH_SENSOR_ADDR: u8 = 0x31;
 /// Simulated distance value when no sensors are connected (cm).
 const SIMULATED_DISTANCE: u16 = 50;
 /// 16-bit index of the VL53L4CD `I2C_SLAVE__DEVICE_ADDRESS` register.
-#[allow(dead_code)]
 const REG_I2C_SLAVE_DEVICE_ADDRESS: [u8; 2] = [0x00, 0x01];
 /// Ranging timing budget (20 ms => ~50 Hz). 50Hz provides a more stable, less noisy signal than 100Hz for the Theremin.
-#[allow(dead_code)]
 const TIMING_BUDGET_MS: u32 = 20;
 /// 0 selects continuous ranging mode.
-#[allow(dead_code)]
 const INTER_MEASUREMENT_MS: u32 = 0;
 /// Delay before rebooting after a fatal error, so logs can be read on the console.
 const FATAL_RESTART_DELAY_MS: u32 = 5_000;
-/// USB-MIDI virtual cable used for all outgoing messages.
-#[allow(dead_code)]
-const USB_MIDI_CABLE: u8 = 0;
 
 /// Shared sensor state accessible by all threads.
 struct SensorState {
@@ -257,78 +248,9 @@ impl embedded_hal_async::i2c::I2c for AsyncI2cWrapper<'_> {
     }
 }
 
-// --- TinyUSB FFI ---
-
-#[allow(dead_code)]
-#[repr(C)]
-struct TinyUsbConfig {
-    _device_descriptor: *const core::ffi::c_void,
-    _string_descriptor: *mut *const core::ffi::c_char,
-    _string_descriptor_count: core::ffi::c_int,
-    _external_phy: bool,
-    _configuration_descriptor: *const u8,
-    _self_powered: bool,
-    _vbus_monitor_io: core::ffi::c_int,
-}
-
-#[allow(dead_code)]
-extern "C" {
-    fn tinyusb_driver_install(config: *const TinyUsbConfig) -> i32;
-    fn tud_midi_n_stream_write(itf: u8, cable_num: u8, buffer: *const u8, bufsize: u32) -> u32;
-}
-
-/// USB Composite Device Descriptor (MIDI + CDC)
-#[allow(dead_code)]
-static DEVICE_DESCRIPTOR: [u8; 18] = [
-    0x12, 0x01, 0x00, 0x02, 0xEF, 0x02, 0x01, 0x40, 0x89, 0x12, 0x33, 0x0D, 0x01, 0x01, 0x01, 0x03,
-    0x01, 0x00,
-];
-
-#[allow(dead_code)]
-static CONFIG_DESCRIPTOR: [u8; 112] = [
-    0x09, 0x02, 0x73, 0x00, 0x03, 0x01, 0x00, 0xA0, 0xFA, 0x08, 0x0B, 0x02, 0x00, 0x02, 0x02, 0x02,
-    0x01, 0x09, 0x04, 0x02, 0x00, 0x01, 0x02, 0x02, 0x01, 0x00, 0x05, 0x24, 0x00, 0x10, 0x01, 0x04,
-    0x24, 0x02, 0x02, 0x05, 0x24, 0x06, 0x00, 0x03, 0x07, 0x05, 0x83, 0x03, 0x08, 0x01, 0xFF, 0x09,
-    0x04, 0x03, 0x00, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x09, 0x04, 0x01, 0x00, 0x00, 0x01, 0x01, 0x03,
-    0x00, 0x09, 0x24, 0x01, 0x00, 0x01, 0x10, 0x01, 0x01, 0x01, 0x01, 0x09, 0x24, 0x02, 0x01, 0x01,
-    0x03, 0x01, 0x01, 0x00, 0x09, 0x24, 0x03, 0x02, 0x01, 0x01, 0x01, 0x01, 0x00, 0x07, 0x24, 0x01,
-    0x00, 0x01, 0x41, 0x00, 0x07, 0x05, 0x81, 0x02, 0x40, 0x00, 0x01, 0x05, 0x25, 0x01, 0x01, 0x00,
-];
-
-#[allow(dead_code)]
-fn install_usb_midi() -> Result<(), FirmwareError> {
-    let cfg = TinyUsbConfig {
-        _device_descriptor: DEVICE_DESCRIPTOR.as_ptr() as *const core::ffi::c_void,
-        _string_descriptor: core::ptr::null_mut(),
-        _string_descriptor_count: 0,
-        _external_phy: false,
-        _configuration_descriptor: CONFIG_DESCRIPTOR.as_ptr(),
-        _self_powered: false,
-        _vbus_monitor_io: 0,
-    };
-    let ret = unsafe { tinyusb_driver_install(&cfg) };
-    EspError::convert(ret).context("TinyUSB driver install")
-}
-
-/// Sends one MIDI message over USB.
-#[allow(dead_code)]
-fn send_usb_midi(bytes: &[u8]) {
-    let Ok(len) = u32::try_from(bytes.len()) else {
-        log::debug!("USB-MIDI TX skipped: message too long");
-        return;
-    };
-    let written = unsafe { tud_midi_n_stream_write(0, USB_MIDI_CABLE, bytes.as_ptr(), len) };
-    if written != len {
-        log::debug!("USB-MIDI TX incomplete: {written}/{len} bytes ({bytes:02X?})");
-    } else {
-        log::debug!("USB-MIDI TX: {bytes:02X?}");
-    }
-}
-
 // --- Sensors ---
-
-#[allow(dead_code)]
-fn new_sensor(bus: &I2cBus, addr: u8) -> Sensor<'_> {
+ 
+fn new_sensor<'a>(bus: &'a I2cBus, addr: u8) -> Sensor<'a> {
     vl53l4cd::Vl53l4cd::with_addr(
         AsyncI2cWrapper(bus),
         addr,
@@ -340,8 +262,7 @@ fn new_sensor(bus: &I2cBus, addr: u8) -> Sensor<'_> {
 /// Initialises the sensor currently answering on the default address and moves it
 /// to `new_addr`. `set_device_address` was removed in vl53l4cd v0.4, so the register
 /// is written directly.
-#[allow(dead_code)]
-async fn init_and_readdress(bus: &I2cBus, new_addr: u8) -> Result<Sensor<'_>, FirmwareError> {
+async fn init_and_readdress<'a>(bus: &'a I2cBus, new_addr: u8) -> Result<Sensor<'a>, FirmwareError> {
     let mut sensor = new_sensor(bus, VL53L4CD_DEFAULT_ADDR);
     sensor
         .init()
@@ -357,7 +278,6 @@ async fn init_and_readdress(bus: &I2cBus, new_addr: u8) -> Result<Sensor<'_>, Fi
     Ok(new_sensor(bus, new_addr))
 }
 
-#[allow(dead_code)]
 async fn start_ranging(sensor: &mut Sensor<'_>, name: &'static str) -> Result<(), FirmwareError> {
     sensor
         .set_range_timing(TIMING_BUDGET_MS, INTER_MEASUREMENT_MS)
@@ -368,7 +288,6 @@ async fn start_ranging(sensor: &mut Sensor<'_>, name: &'static str) -> Result<()
 
 /// Reads the measurement signalled by the interrupt line, then re-arms the interrupt.
 /// The interrupt is always cleared, even if the read failed, to avoid a stuck line.
-#[allow(dead_code)]
 async fn read_pending_distance(sensor: &mut Sensor<'_>) -> Result<u16, FirmwareError> {
     let measurement = sensor.read_measurement().await;
     let cleared = sensor.clear_interrupt().await;
@@ -629,19 +548,20 @@ async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
     }
     log::info!("[Slave] Slint platform initialized");
 
-    // Initialize Touchscreen (GT911 via PCA9557 I2C) & UART
-    let mut i2c_opt = None;
+    // Initialize Touchscreen (GT911 via PCA9557 I2C), Front Panel (MCP23017), Dual ToF & UART
+    let mut i2c_bus_opt: Option<I2cBus> = None;
     let mut gt911_opt = None;
     let mut uart_opt = None;
+    let mut front_panel_opt = None;
 
     if let Ok(peripherals) = Peripherals::take() {
         let pins = peripherals.pins;
 
-        // 1. Initialize I2C0 for Touch Screen (SDA=GPIO19, SCL=GPIO20)
+        // 1. Initialize I2C0 for Touch Screen & Peripherals (SDA=GPIO19, SCL=GPIO20 at 400 kHz)
         let i2c_config = esp_idf_hal::i2c::I2cConfig::new().baudrate(400.kHz().into());
         match esp_idf_hal::i2c::I2cDriver::new(peripherals.i2c0, pins.gpio19, pins.gpio20, &i2c_config) {
             Ok(mut driver) => {
-                log::info!("[Slave] I2C0 driver initialized on SDA=GPIO19, SCL=GPIO20");
+                log::info!("[Slave] I2C0 driver initialized on SDA=GPIO19, SCL=GPIO20 (400 kHz)");
                 // Pre-reset I2C scan
                 touch::scan_i2c_bus(&mut driver);
                 // Hardware reset of GT911 via PCA9557
@@ -654,20 +574,18 @@ async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
                 // Initialize Theremin Front Panel (assembling generic MCP23017, buttons, encoder & ToF reset)
                 let mut front_panel = front_panel::ThereminFrontPanel::new(mcp23017::MCP23017_DEFAULT_ADDR);
                 if let Err(e) = front_panel.init(&mut driver) {
-                    log::info!("[Slave] MCP23017 front panel not detected at 0x20 (normal if shield unattached): {:?}", e);
+                    log::info!("[Slave] MCP23017 front panel not detected at 0x20 (hardware absent): {:?}", e);
                 } else {
                     log::info!("[Slave] MCP23017 front panel successfully detected and initialized at 0x20");
-                    if let Err(e) = front_panel.tof_controller.release_left(&mut front_panel.expander, &mut driver) {
-                        log::warn!("[Slave] Left ToF release failed: {:?}", e);
-                    }
+                    front_panel_opt = Some(front_panel);
                 }
 
                 // Initialize GT911 driver
                 gt911_opt = touch::Gt911Driver::init(&mut driver).ok();
-                i2c_opt = Some(driver);
+                i2c_bus_opt = Some(RefCell::new(driver));
             }
             Err(e) => {
-                log::warn!("[Slave] Failed to initialize I2C0 for touch: {:?}", e);
+                log::warn!("[Slave] Failed to initialize I2C0: {:?}", e);
             }
         }
 
@@ -694,6 +612,85 @@ async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
         log::warn!("[Slave] Peripherals::take() failed or already taken");
     }
 
+    // Sequential ToF hardware initialization with resilient absent detection
+    let mut tof_vol_opt = None;
+    let mut tof_pitch_opt = None;
+    let hardware_connected;
+
+    if let (Some(bus), Some(fp)) = (i2c_bus_opt.as_ref(), front_panel_opt.as_mut()) {
+        log::info!("[Slave] Initiating dual ST VL53L4CD sequential boot & dynamic address assignment...");
+
+        // 1. Release Left ToF (Volume) via MCP23017 GPA0
+        let left_release_ok = {
+            if let Ok(mut driver) = bus.try_borrow_mut() {
+                fp.tof_controller.release_left(&mut fp.expander, &mut driver).is_ok()
+            } else {
+                false
+            }
+        };
+
+        if left_release_ok {
+            // ST VL53L4CD firmware boot time margin (min 1.2 ms, wait 5 ms)
+            FreeRtos::delay_ms(5);
+            log::info!("[Slave] Initializing Left ToF @ default 0x29 -> moving to 0x{:02X}...", VOLUME_SENSOR_ADDR);
+            match init_and_readdress(bus, VOLUME_SENSOR_ADDR).await {
+                Ok(mut s) => {
+                    if let Err(e) = start_ranging(&mut s, "left_volume").await {
+                        log::warn!("[Slave] Failed to start ranging on Left ToF: {:?}", e);
+                    } else {
+                        log::info!("[Slave] Left ToF (Volume) initialized and ranging at 0x{:02X}", VOLUME_SENSOR_ADDR);
+                        tof_vol_opt = Some(s);
+                    }
+                }
+                Err(e) => {
+                    log::warn!("[Slave] Left ToF (Volume) init/readdress failed: {:?}", e);
+                }
+            }
+        } else {
+            log::warn!("[Slave] Failed to release Left ToF reset line");
+        }
+
+        // 2. Release Right ToF (Pitch) via MCP23017 GPA1
+        let right_release_ok = {
+            if let Ok(mut driver) = bus.try_borrow_mut() {
+                fp.tof_controller.release_right(&mut fp.expander, &mut driver).is_ok()
+            } else {
+                false
+            }
+        };
+
+        if right_release_ok {
+            FreeRtos::delay_ms(5);
+            log::info!("[Slave] Initializing Right ToF @ default 0x29 -> moving to 0x{:02X}...", PITCH_SENSOR_ADDR);
+            match init_and_readdress(bus, PITCH_SENSOR_ADDR).await {
+                Ok(mut s) => {
+                    if let Err(e) = start_ranging(&mut s, "right_pitch").await {
+                        log::warn!("[Slave] Failed to start ranging on Right ToF: {:?}", e);
+                    } else {
+                        log::info!("[Slave] Right ToF (Pitch) initialized and ranging at 0x{:02X}", PITCH_SENSOR_ADDR);
+                        tof_pitch_opt = Some(s);
+                    }
+                }
+                Err(e) => {
+                    log::warn!("[Slave] Right ToF (Pitch) init/readdress failed: {:?}", e);
+                }
+            }
+        } else {
+            log::warn!("[Slave] Failed to release Right ToF reset line");
+        }
+
+        if tof_vol_opt.is_some() && tof_pitch_opt.is_some() {
+            hardware_connected = true;
+            log::info!("[Slave] All hardware peripherals ACTIVE: MCP23017 + Dual VL53L4CD (0x{:02X}, 0x{:02X})", VOLUME_SENSOR_ADDR, PITCH_SENSOR_ADDR);
+        } else {
+            hardware_connected = false;
+            log::warn!("[Slave] One or more ToF sensors not responding: fallback to Simulation Mode");
+        }
+    } else {
+        hardware_connected = false;
+        log::info!("[Slave] MCP23017 front panel not present: fallback to Simulation Mode");
+    }
+
     // Create the Slint UI (Unified MainWindow with Master & Slave views)
     let window = Box::new(MainWindow::new().map_err(|_| FirmwareError {
         step: "Slint window creation",
@@ -710,6 +707,7 @@ async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
     window.set_frequency("-- Hz".into());
     window.set_transpose("+0".into());
     window.set_is_master_view(true);
+    window.set_hardware_connected(hardware_connected);
 
     // Initial i18n (French by default)
     let current_language = Arc::new(Mutex::new(i18n::Language::French));
@@ -891,20 +889,33 @@ async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
 
     if is_demo {
         log::info!("[UI] Running autonomous demo/test animation loop with touch...");
-        run_slave_demo_loop(&window, i2c_opt.as_mut(), gt911_opt.as_ref(), config_rx).await;
+        run_slave_demo_loop(
+            &window,
+            i2c_bus_opt.as_ref(),
+            gt911_opt.as_ref(),
+            front_panel_opt,
+            tof_vol_opt,
+            tof_pitch_opt,
+            config_rx,
+        )
+        .await;
     } else {
         log::info!("[UI] Running UART telemetry listener loop with touch...");
-        run_slave_telemetry_loop(&window, i2c_opt.as_mut(), gt911_opt.as_ref(), uart_opt, config_rx).await;
+        run_slave_telemetry_loop(&window, i2c_bus_opt.as_ref(), gt911_opt.as_ref(), uart_opt, config_rx).await;
     }
 
     Ok(())
 }
 
-/// Autonomous test/demo animation loop with live touch interaction and lock-free decoupled processor integration.
-async fn run_slave_demo_loop(
+/// Autonomous test/demo animation loop with live touch interaction, front panel inputs,
+/// and resilient live ToF / synthetic simulation integration.
+async fn run_slave_demo_loop<'a>(
     window: &MainWindow,
-    mut i2c: Option<&mut esp_idf_hal::i2c::I2cDriver<'static>>,
+    bus: Option<&'a I2cBus>,
     gt911: Option<&touch::Gt911Driver>,
+    mut front_panel: Option<front_panel::ThereminFrontPanel>,
+    mut tof_vol: Option<Sensor<'a>>,
+    mut tof_pitch: Option<Sensor<'a>>,
     mut config_rx: heapless::spsc::Consumer<'static, ConfigMessage>,
 ) {
     let mut processor = TofThereminProcessor::default();
@@ -913,6 +924,7 @@ async fn run_slave_demo_loop(
     let snapshot = concurrency::AtomicTunerSnapshot::new();
     let mut prev_is_master = window.get_is_master_view();
     let mut force_redraw_frames: u8 = 0;
+    let mut is_muted: bool = false;
 
     loop {
         // 1. Drain pending UI configuration messages lock-free (zero mutex contention!)
@@ -921,46 +933,124 @@ async fn run_slave_demo_loop(
         }
 
         // 2. Poll Touchscreen and dispatch Slint Pointer events
-        if let (Some(gt), Some(ref mut bus)) = (gt911, i2c.as_mut()) {
-            match gt.poll_touch(bus) {
-                touch::TouchEvent::Pressed { x, y } => {
-                    match last_touch {
-                        None => {
-                            log::info!("[Touch] PointerPressed at ({}, {})", x, y);
-                            platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerPressed {
-                                position: slint::LogicalPosition::new(x as f32, y as f32),
-                                button: slint::platform::PointerEventButton::Left,
-                            });
-                            last_touch = Some((x, y));
-                        }
-                        Some((prev_x, prev_y)) => {
-                            if (x as i32 - prev_x as i32).abs() > 1 || (y as i32 - prev_y as i32).abs() > 1 {
-                                platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerMoved {
+        if let (Some(gt), Some(bus_ref)) = (gt911, bus) {
+            if let Ok(mut driver) = bus_ref.try_borrow_mut() {
+                match gt.poll_touch(&mut driver) {
+                    touch::TouchEvent::Pressed { x, y } => {
+                        match last_touch {
+                            None => {
+                                log::info!("[Touch] PointerPressed at ({}, {})", x, y);
+                                platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerPressed {
                                     position: slint::LogicalPosition::new(x as f32, y as f32),
+                                    button: slint::platform::PointerEventButton::Left,
                                 });
                                 last_touch = Some((x, y));
                             }
+                            Some((prev_x, prev_y)) => {
+                                if (x as i32 - prev_x as i32).abs() > 1 || (y as i32 - prev_y as i32).abs() > 1 {
+                                    platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerMoved {
+                                        position: slint::LogicalPosition::new(x as f32, y as f32),
+                                    });
+                                    last_touch = Some((x, y));
+                                }
+                            }
                         }
                     }
-                }
-                touch::TouchEvent::Released => {
-                    if let Some((prev_x, prev_y)) = last_touch {
-                        log::info!("[Touch] PointerReleased at ({}, {})", prev_x, prev_y);
-                        platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerReleased {
-                            position: slint::LogicalPosition::new(prev_x as f32, prev_y as f32),
-                            button: slint::platform::PointerEventButton::Left,
-                        });
-                        last_touch = None;
+                    touch::TouchEvent::Released => {
+                        if let Some((prev_x, prev_y)) = last_touch {
+                            log::info!("[Touch] PointerReleased at ({}, {})", prev_x, prev_y);
+                            platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerReleased {
+                                position: slint::LogicalPosition::new(prev_x as f32, prev_y as f32),
+                                button: slint::platform::PointerEventButton::Left,
+                            });
+                            last_touch = None;
+                        }
                     }
+                    touch::TouchEvent::NoUpdate => {}
                 }
-                touch::TouchEvent::NoUpdate => {}
             }
         }
 
-        // 3. Sensor simulation loop (Direct execution on Core 1 without Mutex)
+        // 3. Poll Front Panel (Buttons & Rotary Encoder for UI navigation)
+        if let (Some(fp), Some(bus_ref)) = (front_panel.as_mut(), bus) {
+            if let Ok(mut driver) = bus_ref.try_borrow_mut() {
+                if let Ok(event) = fp.update(&mut driver) {
+                    // Encoder navigation: rotate to adjust base octave
+                    if event.encoder_delta != 0 {
+                        log::info!("[FrontPanel] Encoder rotated: delta = {}", event.encoder_delta);
+                        let cur_oct = window.get_current_octave();
+                        let new_oct = (cur_oct + event.encoder_delta).clamp(0, 8);
+                        if new_oct != cur_oct {
+                            window.set_current_octave(new_oct);
+                            processor.handle_config(ConfigMessage::SetBaseOctave(new_oct));
+                            window.window().request_redraw();
+                        }
+                    }
+                    // Encoder click: toggle between Master view and Tuner view
+                    if event.just_encoder_switch {
+                        let new_view = !window.get_is_master_view();
+                        log::info!("[FrontPanel] Encoder switch clicked -> Toggle View (is_master = {})", new_view);
+                        window.set_is_master_view(new_view);
+                        window.window().request_redraw();
+                    }
+                    // Octave + Button
+                    if event.just_octave_up {
+                        let cur_oct = window.get_current_octave();
+                        if cur_oct < 8 {
+                            let new_oct = cur_oct + 1;
+                            log::info!("[FrontPanel] Button Octave + -> Octave {}", new_oct);
+                            window.set_current_octave(new_oct);
+                            processor.handle_config(ConfigMessage::SetBaseOctave(new_oct));
+                            window.window().request_redraw();
+                        }
+                    }
+                    // Octave - Button
+                    if event.just_octave_down {
+                        let cur_oct = window.get_current_octave();
+                        if cur_oct > 0 {
+                            let new_oct = cur_oct - 1;
+                            log::info!("[FrontPanel] Button Octave - -> Octave {}", new_oct);
+                            window.set_current_octave(new_oct);
+                            processor.handle_config(ConfigMessage::SetBaseOctave(new_oct));
+                            window.window().request_redraw();
+                        }
+                    }
+                    // Mute Button: toggles mute state
+                    if event.just_mute {
+                        is_muted = !is_muted;
+                        log::info!("[FrontPanel] Button Mute pressed -> is_muted = {}", is_muted);
+                        window.window().request_redraw();
+                    }
+                }
+            }
+        }
+
+        // 4. Sensor measurement loop (Live VL53L4CD or Synthetic Simulation Fallback)
         let angle = (step as f32) * 0.015;
         let sim_pitch_z = (525.0 + 380.0 * angle.sin()) as u16; // 145mm .. 905mm
         let sim_vol_z = (200.0 + 120.0 * ((step as f32) * 0.025).cos()) as u16; // 80mm .. 320mm
+
+        let (pitch_z, vol_z) = if let (Some(ref mut p_sensor), Some(ref mut v_sensor)) =
+            (tof_pitch.as_mut(), tof_vol.as_mut())
+        {
+            let p = match read_pending_distance(p_sensor).await {
+                Ok(d) => d,
+                Err(e) => {
+                    log::debug!("[ToF] Pitch read failed: {:?}", e);
+                    sim_pitch_z
+                }
+            };
+            let v = match read_pending_distance(v_sensor).await {
+                Ok(d) => d,
+                Err(e) => {
+                    log::debug!("[ToF] Volume read failed: {:?}", e);
+                    sim_vol_z
+                }
+            };
+            (p, v)
+        } else {
+            (sim_pitch_z, sim_vol_z)
+        };
 
         let mut events = [InstrumentEvent::NoteOff {
             channel: Channel::new(0),
@@ -972,12 +1062,13 @@ async fn run_slave_demo_loop(
             fn handle(&mut self, _event: expressive_core::telemetry::TelemetryEvent) {}
         }
         let _ = processor.process_event(
-            SensorEvent::Position3D { id: 0, x: 0, y: 0, z: sim_pitch_z },
+            SensorEvent::Position3D { id: 0, x: 0, y: 0, z: pitch_z },
             &mut events,
             &mut NullTelemetry,
         );
+        let effective_vol_z = if is_muted { 0 } else { vol_z };
         let _ = processor.process_event(
-            SensorEvent::Position3D { id: 1, x: 0, y: 0, z: sim_vol_z },
+            SensorEvent::Position3D { id: 1, x: 0, y: 0, z: effective_vol_z },
             &mut events,
             &mut NullTelemetry,
         );
@@ -986,8 +1077,8 @@ async fn run_slave_demo_loop(
         let bend_u16 = processor.current_pitch_bend();
         let pb_range = processor.pitch_bend_range_semitones as f32;
         let cents = ((bend_u16 as f32 - 8192.0) / 8191.0) * pb_range * 100.0;
-        let vol_norm = processor.current_volume() as f32 / 127.0;
-        let active = processor.is_playing() && vol_norm > 0.05;
+        let vol_norm = if is_muted { 0.0 } else { processor.current_volume() as f32 / 127.0 };
+        let active = !is_muted && processor.is_playing() && vol_norm > 0.05;
 
         // Musical tuner calculation: find nearest semitone and detune cents in [-50, +50]
         let total_semis = note_u8 as f32 + (cents / 100.0);
@@ -1073,7 +1164,7 @@ async fn run_slave_demo_loop(
 /// Normal Slave mode: listens for UART telemetry packets from Master with live touch support.
 async fn run_slave_telemetry_loop(
     window: &MainWindow,
-    mut i2c: Option<&mut esp_idf_hal::i2c::I2cDriver<'static>>,
+    bus: Option<&I2cBus>,
     gt911: Option<&touch::Gt911Driver>,
     uart_driver: Option<esp_idf_hal::uart::AsyncUartDriver<'static, esp_idf_hal::uart::UartDriver<'static>>>,
     mut _config_rx: heapless::spsc::Consumer<'static, ConfigMessage>,
@@ -1152,39 +1243,41 @@ async fn run_slave_telemetry_loop(
 
     loop {
         // Poll Touchscreen and dispatch Slint Pointer events
-        if let (Some(gt), Some(ref mut bus)) = (gt911, i2c.as_mut()) {
-            match gt.poll_touch(bus) {
-                touch::TouchEvent::Pressed { x, y } => {
-                    match last_touch {
-                        None => {
-                            log::info!("[Touch] PointerPressed at ({}, {})", x, y);
-                            platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerPressed {
-                                position: slint::LogicalPosition::new(x as f32, y as f32),
-                                button: slint::platform::PointerEventButton::Left,
-                            });
-                            last_touch = Some((x, y));
-                        }
-                        Some((prev_x, prev_y)) => {
-                            if (x as i32 - prev_x as i32).abs() > 1 || (y as i32 - prev_y as i32).abs() > 1 {
-                                platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerMoved {
+        if let (Some(gt), Some(bus_ref)) = (gt911, bus) {
+            if let Ok(mut driver) = bus_ref.try_borrow_mut() {
+                match gt.poll_touch(&mut driver) {
+                    touch::TouchEvent::Pressed { x, y } => {
+                        match last_touch {
+                            None => {
+                                log::info!("[Touch] PointerPressed at ({}, {})", x, y);
+                                platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerPressed {
                                     position: slint::LogicalPosition::new(x as f32, y as f32),
+                                    button: slint::platform::PointerEventButton::Left,
                                 });
                                 last_touch = Some((x, y));
                             }
+                            Some((prev_x, prev_y)) => {
+                                if (x as i32 - prev_x as i32).abs() > 1 || (y as i32 - prev_y as i32).abs() > 1 {
+                                    platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerMoved {
+                                        position: slint::LogicalPosition::new(x as f32, y as f32),
+                                    });
+                                    last_touch = Some((x, y));
+                                }
+                            }
                         }
                     }
-                }
-                touch::TouchEvent::Released => {
-                    if let Some((prev_x, prev_y)) = last_touch {
-                        log::info!("[Touch] PointerReleased at ({}, {})", prev_x, prev_y);
-                        platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerReleased {
-                            position: slint::LogicalPosition::new(prev_x as f32, prev_y as f32),
-                            button: slint::platform::PointerEventButton::Left,
-                        });
-                        last_touch = None;
+                    touch::TouchEvent::Released => {
+                        if let Some((prev_x, prev_y)) = last_touch {
+                            log::info!("[Touch] PointerReleased at ({}, {})", prev_x, prev_y);
+                            platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerReleased {
+                                position: slint::LogicalPosition::new(prev_x as f32, prev_y as f32),
+                                button: slint::platform::PointerEventButton::Left,
+                            });
+                            last_touch = None;
+                        }
                     }
+                    touch::TouchEvent::NoUpdate => {}
                 }
-                touch::TouchEvent::NoUpdate => {}
             }
         }
 
