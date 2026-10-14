@@ -1,26 +1,26 @@
 ## Context
-Completed implementation and verification of Option 1: RP2040-Zero USB-MIDI coprocessor and ESP32-S3 Core 1 streaming bridge:
-- **`expressive-core` (`core/src/midi.rs`)**:
-  - Implemented Table 4-1 compliant `UsbMidiPacket([u8; 4])` and `ToUsbMidi` trait with CIN categorization (NoteOn, NoteOff, PitchBend, CC74 Timbre, ChannelPressure).
-  - Added 5 unit tests (12 tests total passing).
-- **RP2040-Zero Firmware (`firmwares/rp2040-usb-midi`)**:
-  - Independent ARM Cortex-M0+ crate (`thumbv6m-none-eabi`) using Embassy async runtime.
-  - I2C0 target on GPIO 4 (SDA) / GPIO 5 (SCL) at address `0x40`.
-  - Class-compliant USB-MIDI 1.0 bulk IN endpoint.
-  - Short-packet batching (max 60 bytes < 64 byte limit) guaranteeing immediate host dispatch without ZLP delays.
-- **ESP32-S3 Core 1 Integration (`firmwares/expressive-theremin/src/main.rs`)**:
-  - Non-blocking I2C write to `0x40` (5ms timeout) ensuring zero stutter on DSP or UI when RP2040 is unplugged.
-  - Corrected `hw_connected` detection: excluded onboard GT911 touchscreen so the red warning banner (`HARDWARE DISCONNECTED`) correctly alerts when expander/sensors are absent.
-- **Gate 3 Adversarial Grill**:
-  - Completed and documented in `rp2040_usb_midi_implementation_grill.md`.
+Completed implementation and validation of the Unified Firmware Update System (CrowPanel USB single entry point -> RP2040 I2C In-System Programming):
+- **RP2040 I2C Target Bootloader (`firmwares/rp2040-i2c-bootloader`)**:
+  - Compact 16 KB bootloader (`0x10000000 .. 0x10004000`) on I2C target address `0x40`.
+  - ROM-assisted Flash sector erase and page programming.
+  - Fail-safe metadata sector at `0x101FF000` with IEEE 802.3 CRC32 verification and atomic valid flag.
+  - Safe 50ms boot window before branching to application at `0x10004000`.
+- **Relocated RP2040 USB-MIDI Coprocessor (`firmwares/rp2040-usb-midi`)**:
+  - Memory origin relocated to `0x10004000`.
+  - Raw binary (`rp2040-usb-midi.bin`) extracted: 22,144 bytes (~21.6 KB, CRC32 `0xE6656122`).
+- **ESP32-S3 Master Flasher (`firmwares/expressive-theremin/src/rpe_flasher.rs`)**:
+  - Embeds `rp2040-usb-midi.bin` via `include_bytes!`.
+  - Probes coprocessor on startup: if CRC mismatch or bootloader mode, flashes blocks of 128 bytes with retry and CRC verification in < 1 second.
+- **ESP32-S3 Flash Optimization**:
+  - Added `lto = "fat"` and `codegen-units = 1` in `Cargo.toml`, freeing >600 KB of Flash headroom.
 
 ## Verification
-- `cargo fmt --all --check`: Clean (0 diffs).
+- `cargo +stable clippy --release --offline -- -D warnings` (`rp2040-i2c-bootloader`): Clean (0 warnings).
 - `cargo +stable clippy --release --offline -- -D warnings` (`rp2040-usb-midi`): Clean (0 warnings).
 - `cargo clippy --release -- -D warnings` (`expressive-theremin`): Clean (0 warnings).
 - `cargo test -p expressive-core -p theremin`: 20 passed, 0 failed.
-- Committed as `86a5bda`.
+- `cargo fmt --all --check`: Clean (0 diffs).
 
 ## Next Logical Action
-1. Flash firmware onto Waveshare RP2040-Zero via SWD/picotool (`target/thumbv6m-none-eabi/release/rp2040-usb-midi`).
-2. Test USB enumeration as "Expressive Theremin MIDI" on host DAW (CoreMIDI / ALSA / WASAPI).
+1. Bootstrap bootloader onto Waveshare RP2040-Zero via USB (`rp2040-i2c-bootloader.uf2`).
+2. Test end-to-end I2C update triggered by CrowPanel on initial boot.

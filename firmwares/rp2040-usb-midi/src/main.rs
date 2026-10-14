@@ -12,6 +12,7 @@ use embassy_rp::peripherals::{I2C0, USB};
 use embassy_rp::usb::{Driver, InterruptHandler as UsbInterruptHandler};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
+use embassy_time::Timer;
 use embassy_usb::class::midi::MidiClass;
 use embassy_usb::{Builder, Config as UsbConfig};
 
@@ -74,22 +75,77 @@ async fn midi_sender_task(
     }
 }
 
+pub const METADATA_BASE: u32 = 0x101F_F000;
+pub const BOOTLOADER_MAGIC: u32 = 0xB007_10AD;
+pub const WATCHDOG_SCRATCH0: *mut u32 = 0x4005_800C as *mut u32;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct AppMetadata {
+    pub magic: u32,
+    pub version: u32,
+    pub size: u32,
+    pub crc32: u32,
+    pub valid: u32,
+}
+
 #[embassy_executor::task]
 async fn i2c_target_task(mut i2c_slave: I2cSlave<'static, I2C0>) -> ! {
     defmt::info!("I2C Target listening on address 0x40");
     let mut rx_buf = [0u8; 64];
+    let mut tx_buf = [0u8; 16];
+    let mut should_reset = false;
 
     loop {
         match i2c_slave.listen(&mut rx_buf).await {
-            Ok(Command::Write(len)) | Ok(Command::WriteRead(len)) => {
-                // Process received data in 4-byte USB-MIDI packets
-                let valid_len = (len / 4) * 4;
-                for &packet in rx_buf[..valid_len].as_chunks::<4>().0 {
-                    let _ = MIDI_QUEUE.try_send(packet);
+            Ok(Command::Write(len)) => {
+                if len == 1 && rx_buf[0] == 0x01 {
+                    // CMD_GET_STATUS
+                    let meta = unsafe { core::ptr::read_volatile(METADATA_BASE as *const AppMetadata) };
+                    tx_buf[0] = 0xA0; // State: Application running
+                    tx_buf[1] = 0x01; // Protocol v1
+                    tx_buf[2..6].copy_from_slice(&meta.size.to_be_bytes());
+                    tx_buf[6..10].copy_from_slice(&meta.crc32.to_be_bytes());
+                    tx_buf[10..14].copy_from_slice(&meta.version.to_be_bytes());
+                } else if len == 1 && rx_buf[0] == 0xFB {
+                    // CMD_ENTER_BOOTLOADER
+                    defmt::info!("Received CMD_ENTER_BOOTLOADER! Arming watchdog scratch and resetting...");
+                    tx_buf[0] = 0x06; // ACK
+                    unsafe { core::ptr::write_volatile(WATCHDOG_SCRATCH0, BOOTLOADER_MAGIC) };
+                    should_reset = true;
+                } else {
+                    // Process received data in 4-byte USB-MIDI packets
+                    let valid_len = (len / 4) * 4;
+                    for &packet in rx_buf[..valid_len].as_chunks::<4>().0 {
+                        let _ = MIDI_QUEUE.try_send(packet);
+                    }
+                }
+            }
+            Ok(Command::WriteRead(len)) => {
+                if len == 1 && rx_buf[0] == 0x01 {
+                    let meta = unsafe { core::ptr::read_volatile(METADATA_BASE as *const AppMetadata) };
+                    tx_buf[0] = 0xA0;
+                    tx_buf[1] = 0x01;
+                    tx_buf[2..6].copy_from_slice(&meta.size.to_be_bytes());
+                    tx_buf[6..10].copy_from_slice(&meta.crc32.to_be_bytes());
+                    tx_buf[10..14].copy_from_slice(&meta.version.to_be_bytes());
+                } else if len == 1 && rx_buf[0] == 0xFB {
+                    tx_buf[0] = 0x06;
+                    unsafe { core::ptr::write_volatile(WATCHDOG_SCRATCH0, BOOTLOADER_MAGIC) };
+                    should_reset = true;
+                }
+                let _ = i2c_slave.respond_to_read(&tx_buf).await;
+                if should_reset {
+                    Timer::after_millis(10).await;
+                    cortex_m::peripheral::SCB::sys_reset();
                 }
             }
             Ok(Command::Read) => {
-                // ESP32 master currently only writes MIDI packets.
+                let _ = i2c_slave.respond_to_read(&tx_buf).await;
+                if should_reset {
+                    Timer::after_millis(10).await;
+                    cortex_m::peripheral::SCB::sys_reset();
+                }
             }
             Ok(Command::GeneralCall(_)) => {}
             Err(e) => {

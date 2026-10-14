@@ -10,15 +10,16 @@ V0.6 ToF Theremin Prototype (ESP32-S3 + CrowPanel 5.0" Slint UI)
 Hardware-in-the-Loop validation of real-time dual-core performance and RP2040-Zero USB-MIDI coprocessor design.
 
 ## Last completed
-- Implemented and verified Option 1: RP2040-Zero USB-MIDI Class-Compliant coprocessor firmware:
-  - Crate `firmwares/rp2040-usb-midi` (RP2040 Cortex-M0+, Embassy async, Embassy USB-MIDI, I2C target).
-  - I2C0 target on GPIO 4 (SDA) / GPIO 5 (SCL) at address `0x40`.
-  - Batching up to 15 packets (60 bytes < 64 byte endpoint limit) to guarantee short packet delivery without zero-length packet (ZLP) latency.
-  - Implemented `UsbMidiPacket` (Table 4-1 compliant) and `ToUsbMidi` trait in `core/src/midi.rs` (5 new unit tests, 12 total passing).
-  - Wired Core 1 sensor/DSP loop in `firmwares/expressive-theremin/src/main.rs` to stream 4-byte MIDI packets over I2C to address `0x40`.
-  - Completed Adversarial Post-Implementation Grill (Gate 3) in `rp2040_usb_midi_implementation_grill.md`. All clippy, compilation, and unit tests passing.
+- Implemented and rigorously grilled Unified Firmware Update System (commit `43813a6`):
+  - Created crate `firmwares/rp2040-i2c-bootloader` (16 KB flash @ `0x10000000`, I2C Target @ `0x40`, ROM flash programming, IEEE 802.3 CRC32 verification).
+  - Addressed 6 Inquisitor Grill critical findings: 256-byte page alignment, watchdog scratch reboot mechanism (`0xB007_10AD`), active 100ms boot window listening, NVIC cleanup before jump, and 800ms flash erase delay.
+  - Relocated application `firmwares/rp2040-usb-midi` origin to `0x10004000`, added I2C commands (`0x01` status, `0xFB` reboot into bootloader).
+  - Automated compilation and raw binary embedding in `firmwares/expressive-theremin/build.rs` and `rpe_flasher.rs`.
+  - Release profile optimization (`lto = "fat"`, `codegen-units = 1`), saving >600 KB Flash.
+  - Zero unwrap rule strictly respected across all production crates.
 
 ## Next action
-- Commit RP2040-Zero USB-MIDI coprocessor implementation and ESP32-S3 streaming bridge.
-- Flash firmware onto Waveshare RP2040-Zero via SWD/picotool and validate USB enumeration on host DAW.
+- Bench validation: flash `rp2040-i2c-bootloader.uf2` manually once via USB-C `BOOTSEL`.
+- Flash CrowPanel image via USB-C (`cargo run --release`).
+- Verify autonomous I2C synchronization (< 1 sec) and host DAW USB-MIDI enumeration.
 

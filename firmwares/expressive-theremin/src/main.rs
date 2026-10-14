@@ -29,6 +29,7 @@ pub mod i18n;
 pub mod mcp23017;
 pub mod platform;
 pub mod protocol;
+pub mod rpe_flasher;
 pub mod touch;
 
 /// Defines the hardware architecture the firmware is built for.
@@ -1008,6 +1009,13 @@ fn core1_sensor_dsp_task(
         hw_connected
     );
     let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::HardwareStatus(hw_connected));
+
+    // Check RP2040 USB-MIDI coprocessor firmware and update over I2C if required
+    if let Some(ref bus_ref) = i2c_bus {
+        if let Ok(mut driver) = bus_ref.try_borrow_mut() {
+            let _ = rpe_flasher::check_and_update_rp2040(&mut driver);
+        }
+    }
 
     let mut processor = TofThereminProcessor::default();
     let mut step: u32 = 0;

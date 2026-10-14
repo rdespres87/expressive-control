@@ -57,15 +57,18 @@
   - Pin sensor polling (GT911 touch, MCP23017, ToF ranging) and musical DSP to **Core 1** (`APP_CPU`) at 100 Hz (10ms), isolated from LCD VSYNC.
   - Pin Slint UI and LCD RGB DMA flush to **Core 0** (`PRO_CPU`) at 60 FPS.
   - Inter-core communication: wait-free SeqLock `AtomicTunerSnapshot` for musical state, lock-free SPSC `heapless::spsc::Queue` for touch/encoder UI input events and configuration changes.
-- [ ] **USB-MIDI Firmware (RP2040-Zero)**:
-  - Implement RP2040 I2C Target firmware receiving 3-byte MIDI packets and streaming Class-Compliant USB-MIDI to host DAW.
+- [x] **USB-MIDI Firmware (RP2040-Zero)**:
+  - Implement RP2040 I2C Target firmware (`firmwares/rp2040-usb-midi`) receiving 3-byte MIDI packets and streaming Class-Compliant USB-MIDI to host DAW. Relocated to `0x10004000`.
 
 ### Interface & Ergonomics (Slint UI)
 - [x] **Unified Master / Slave UI (Single-Screen)**: Dynamic switchable view toggling between Master view (Root, Scale, Octave, PB range, Quantization, Filter speed) and Slave view (Strobe Tuner) via touch buttons (`CONFIG` / `TUNER`) with direct local `TofThereminProcessor` sync.
 - [x] **Internationalization (i18n)**: Zero-allocation static string table in Rust (`i18n.rs`) with interactive `[ FR / EN ]` toggle on Slint UI.
 
 ### System, Deployment & Tools
-- [ ] **Firmware Update Strategy**: Define and implement update strategy (OTA Wi-Fi / Web Installer, USB CDC / DFU, or UART inter-board).
+- [x] **Firmware Update Strategy (Unified CrowPanel USB -> RP2040 I2C ISP)**:
+  - RP2040 I2C Bootloader (`firmwares/rp2040-i2c-bootloader`) with ROM flash programming and CRC32 metadata validation.
+  - ESP32-S3 Master Flasher (`rpe_flasher.rs`) streaming blocks over internal I2C bus at startup.
+  - Automated RP2040 build and ELF extraction in `expressive-theremin/build.rs`.
 - [ ] **Composite USB Device (MIDI + CDC)**: Support simultaneous USB-MIDI and serial CDC via TinyUSB for HIL simulation and live debug.
 - [ ] **GUI Telemetry Tool (Telemetry Viewer)**: Finalize host utility to decode and render hardware telemetry logs in real time.
 

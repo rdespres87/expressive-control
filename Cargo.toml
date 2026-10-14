@@ -4,7 +4,7 @@ members = [
     "instruments/theremin",
     "simulator", "tools/telemetry-viewer",
 ]
-exclude = ["firmwares/nrf5340", "firmwares/expressive-theremin", "firmwares/rp2040-usb-midi"]
+exclude = ["firmwares/nrf5340", "firmwares/expressive-theremin", "firmwares/rp2040-usb-midi", "firmwares/rp2040-i2c-bootloader"]
 resolver = "2"
 
 [profile.release]

@@ -57,3 +57,8 @@ slint-build = "1.18.1"
 # Pinned to 1.x: 2.x breaks the headers expected by esp-idf-sys bindings and the
 # `tinyusb_config_t` layout mirrored by `TinyUsbConfig` in src/main.rs.
 remote_component = { name = "espressif/esp_tinyusb", version = "^1.4" }
+
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
