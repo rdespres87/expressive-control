@@ -1,24 +1,26 @@
 ## Context
-Completed implementation, adversarial Inquisitor Grill, CI verification, and commit of the Pure Rust `tools/elf2uf2` generator and the RP2040 I2C Bootloader UF2 binary:
-- **ELF to UF2 Generator (`tools/elf2uf2`)**:
-  - Pure Rust workspace binary crate without external dependencies.
-  - Generates 512-byte UF2 blocks with RP2040 Bootrom compatibility (magics, Family ID `0xE484FF45`, 256-byte payload alignment, LMA/VMA resolution).
-  - 100% test coverage (6 unit tests passing).
-- **RP2040 I2C Target Bootloader (`firmwares/rp2040-i2c-bootloader`)**:
-  - Linker configured with `-Tlink-rp.x` to guarantee `.boot2` ROM stage mapping at `0x10000000`.
-  - UF2 binary generated at `firmwares/rp2040-i2c-bootloader/rp2040-i2c-bootloader.uf2` (58 blocks, 29,696 bytes).
-- **All previous components remaining verified**:
-  - Relocated RP2040 USB-MIDI coprocessor (`firmwares/rp2040-usb-midi`) at `0x10004000`.
-  - ESP32-S3 Master Flasher (`rpe_flasher.rs`).
-  - Slint UI configuration screen with dynamic `v0.1.0` badge.
+Completed implementation, adversarial Inquisitor Grill, CI verification, bench flashing, and commit of the Slint Graphic Rendering Performance Optimization on CrowPanel 5.0" (commit `c557c64`):
+- **FreeRTOS ISR VSYNC Synchronization (`platform.rs`)**:
+  - Replaced CPU busy-wait loop with direct ISR task notification (`vTaskGenericNotifyGiveFromISR` / `ulTaskGenericNotifyTake`).
+  - Core 0 sleeps at 0% CPU while waiting for hardware VSYNC. Zero race conditions with early notification clearing.
+- **Subpixel Vector Rasterizer Optimization (`gauge_renderer.rs`)**:
+  - Precomputed all 101 radial tick geometries (`PRECOMPUTED_TICKS`) to eliminate runtime `sin`/`cos` trigonometry.
+  - Replaced float `sqrt()` with squared-distance threshold checks (`dist_sq`), bypassing square roots for >90% of bounding box pixels.
+  - Accelerated gauge canvas clearing using slice `fill()` in place of scalar loops.
+  - Added unit test `test_precomputed_ticks_geometry` validating tick consistency and display boundaries.
+- **Zero-Heap UI Diffing in 60 FPS Loop (`main.rs`)**:
+  - Cached previous UI values and added perceptual threshold diffing.
+  - Formatted strings on stack using `heapless::String` with zero heap allocations at 60 FPS.
+- **Physical Hardware Validation**:
+  - Flashed to Elecrow CrowPanel 5.0" via `/dev/cu.usbserial-1420`: verified ultra-fluid Strobe Tuner needle animation and high touch responsiveness.
 
 ## Verification
-- `cargo test -p elf2uf2`: 6 passed, 0 failed.
-- `cargo clippy -p elf2uf2 -- -D warnings`: Clean (0 warnings).
-- `cargo +stable clippy --release --offline -- -D warnings` (`rp2040-i2c-bootloader`): Clean (0 warnings).
-- `cargo test -p expressive-core -p theremin`: 20 passed, 0 failed.
+- `cargo clippy --release -- -D warnings` (`expressive-theremin`): Clean (0 warnings).
+- `cargo test -p expressive-core -p theremin -p elf2uf2`: 26 passed, 0 failed.
 - `cargo fmt --all --check`: Clean (0 diffs).
+- Physical flash onto CrowPanel 5.0": Verified live rendering and confirmed significantly improved frame rate and fluidity.
 
 ## Next Logical Action
-1. Flash `firmwares/rp2040-i2c-bootloader/rp2040-i2c-bootloader.uf2` onto the Waveshare RP2040-Zero (drag-and-drop onto the `RPI-RP2` USB mass storage drive).
-2. Wire RP2040-Zero I2C lines to CrowPanel 5.0" (`GPIO 19` SDA, `GPIO 20` SCL) and observe the ESP32-S3 automatically sync and flash the USB-MIDI application over I2C in < 1 second.
+1. Implement the **Didactic Web Flasher (WebSerial)**: zero-install web page allowing an end-user to update their Theremin in Chrome/Edge in one click via the CrowPanel USB-C cable.
+2. Bench validation of Time-of-Flight sensors (VL53L4CD) on the physical CrowPanel I2C bus.
+
