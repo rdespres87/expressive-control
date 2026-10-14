@@ -69,6 +69,7 @@
   - RP2040 I2C Bootloader (`firmwares/rp2040-i2c-bootloader`) with ROM flash programming and CRC32 metadata validation.
   - ESP32-S3 Master Flasher (`rpe_flasher.rs`) streaming blocks over internal I2C bus at startup.
   - Automated RP2040 build and ELF extraction in `expressive-theremin/build.rs`.
+  - Offline zero-dependency pure Rust `tools/elf2uf2` generator producing `rp2040-i2c-bootloader.uf2` for initial USB bootstrap.
 - [ ] **Composite USB Device (MIDI + CDC)**: Support simultaneous USB-MIDI and serial CDC via TinyUSB for HIL simulation and live debug.
 - [ ] **GUI Telemetry Tool (Telemetry Viewer)**: Finalize host utility to decode and render hardware telemetry logs in real time.
 
