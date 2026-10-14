@@ -146,6 +146,12 @@ The firmware must be built with:
 3. **Capacitive Touch & IO Expander (GT911 & PCA9557)** — Intégré via I2C (`SDA` = GPIO 19, `SCL` = GPIO 20). Le PCA9557 pilote le reset du GT911 (`IO0`), l'adresse/INT (`IO1`), et l'alimentation de l'amplificateur audio (`IO2`).
 4. **Audio Amplifier Mute / Disabled** — Le projet n'utilisant pas d'audio, la broche `PA_EN` (PCA9557 `IO2`) est systématiquement forcée et maintenue à l'état BAS (`LOW`), coupant totalement l'ampli audio embarqué (zéro consommation parasite, aucun souffle).
 5. **Full frame flush** — Currently flushes entire dirty region; could be optimized for partial updates
+6. **USB Port & Hardware USB-MIDI Architecture**:
+   - The onboard USB Type-C connector is hardwired to a **CH340G USB-to-UART bridge** connected to `UART0` (`GPIO 43` TX, `GPIO 44` RX). The ESP32-S3 native USB OTG pins (`GPIO 19` D-, `GPIO 20` D+) are permanently routed to the I2C bus (`SDA`/`SCL`) for the touch controller and peripherals.
+   - Consequently, native USB-MIDI Class Compliant operation directly from the onboard USB-C port is physically impossible without conflicting with firmware flashing.
+   - **Solution**: Native USB-MIDI is delegated to an auxiliary microcontroller (e.g., **Raspberry Pi RP2040-Zero** / **Seeed XIAO**) connected via I2C or serial, providing a dedicated, plug-and-play USB-C MIDI device interface while keeping the CrowPanel port dedicated to power and firmware updates.
+7. **Peripheral Expansion via MCP23017**:
+   - All external human interface controls (1 rotary encoder with click switch, 3 pushbuttons) and the 2 `XSHUT` control lines for the VL53L4CD ToF distance sensors are aggregated onto an external **Waveshare MCP23017** on the shared I2C bus (`0x20`), requiring zero additional dedicated GPIOs on the ESP32.
 
 ## Bug Fix: Struct Layout Mismatch (2026-10-09)
 
