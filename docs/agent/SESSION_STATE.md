@@ -7,9 +7,15 @@ IN_PROGRESS
 V0.6 ToF Theremin Prototype (ESP32-S3 + CrowPanel 5.0" Slint UI)
 
 ## Current task
-Dual VL53L4CD ToF sensor initialization, hardware-absent fallback, and front panel button mapping.
+Real-time sensor polling loop optimization on Core 1 and UI event latency reduction.
 
 ## Last completed
+- Fixed Tuner button vertical text alignment in `firmwares/expressive-theremin/ui/master.slint`:
+  - Removed unbalanced ad-hoc padding on centered `VerticalLayout`.
+  - Added explicit line heights (`30px` for 22px label, `20px` for 14px subtitle), `vertical-alignment: center`, and `horizontal-alignment: center` in centered wrappers.
+  - Calculated exact symmetrical 40px top/bottom margins for the 136px card.
+  - Ensured compile-time font embedding pass covers French and English strings (`◀ ACCORD.` / `◀ TUNER` and `VUE LIVE` / `LIVE VIEW`).
+  - Committed as `c338bed`.
 - Implemented resilient dual VL53L4CD sequential boot & dynamic address assignment (`0x30` Volume, `0x31` Pitch) via MCP23017 expander (`GPA0`/`GPA1`).
 - Implemented zero-panic fallback when hardware shield or ToF sensors are absent or disconnected.
 - Added Slint UI status warning banner at the bottom of the screen (`⚠ Périphériques non connectés (Mode Simulation)` in FR / `⚠ Peripherals disconnected (Simulation Mode)` in EN).
@@ -30,6 +36,6 @@ Dual VL53L4CD ToF sensor initialization, hardware-absent fallback, and front pan
 - Successfully flashed to ESP32-S3 CrowPanel 5.0" via `/dev/cu.usbserial-1420` and verified clean boot with simulation fallback active.
 
 ## Next action
-- Finalize git commit of the `single-screen` architecture formalization (Security Gate 3).
+- Profile and optimize Core 1 real-time sensor polling loop (I2C non-blocking / interrupt-driven, reduced tick jitter, lock-free queue update to Core 0 UI).
 - Implement RP2040-Zero USB-MIDI coprocessor firmware (I2C Target @ 0x40 -> USB-MIDI Class Compliant).
 
