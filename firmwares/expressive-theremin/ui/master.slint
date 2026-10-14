@@ -138,25 +138,32 @@ export component MasterView inherits Rectangle {
                 border-color: back_touch.pressed ? #ffffff : accent;
 
                 VerticalLayout {
-                    padding: 8px;
-                    padding-left: 8px;
-                    padding-right: 8px;
-                    spacing: 4px;
                     alignment: center;
+                    spacing: 6px;
                     
-                    Text {
-                        text: root.i18n.tuner_btn;
-                        color: back_touch.pressed ? #000000 : accent;
-                        font-size: 22px;
-                        font-weight: 900;
-                        horizontal-alignment: center;
+                    HorizontalLayout {
+                        alignment: center;
+                        Text {
+                            height: 30px;
+                            text: root.i18n.tuner_btn;
+                            color: back_touch.pressed ? #000000 : accent;
+                            font-size: 22px;
+                            font-weight: 900;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
                     }
-                    Text {
-                        text: root.i18n.live_view;
-                        color: back_touch.pressed ? #222230 : dim_text;
-                        font-size: 14px;
-                        font-weight: 700;
-                        horizontal-alignment: center;
+                    HorizontalLayout {
+                        alignment: center;
+                        Text {
+                            height: 20px;
+                            text: root.i18n.live_view;
+                            color: back_touch.pressed ? #222230 : dim_text;
+                            font-size: 14px;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
                     }
                 }
 
@@ -456,6 +463,8 @@ export component MasterView inherits Rectangle {
             Text { text: "RÉPONSE RÉPONSES FILTRE DE RÉPONSE réponse réponses"; font-size: 18px; font-weight: 800; }
             Text { text: "RÉPONSE RÉPONSES FILTRE DE RÉPONSE réponse réponses"; font-size: 17px; font-weight: 700; }
             Text { text: "RÉPONSE RÉPONSES FILTRE DE RÉPONSE réponse réponses"; font-size: 18px; font-weight: 700; }
+            Text { text: "◀ ACCORD. ◀ TUNER"; font-size: 22px; font-weight: 900; }
+            Text { text: "VUE LIVE LIVE VIEW"; font-size: 14px; font-weight: 700; }
         }
     }
 }
