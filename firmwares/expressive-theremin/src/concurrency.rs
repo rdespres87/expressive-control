@@ -117,6 +117,33 @@ pub fn create_config_channel(
     queue.split()
 }
 
+/// UI input events produced by Core 1 (touch / front panel) and consumed by Core 0 (Slint UI).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum UiInputEvent {
+    PointerPressed { x: f32, y: f32 },
+    PointerMoved { x: f32, y: f32 },
+    PointerReleased,
+    EncoderDelta(i8),
+    ToggleView,
+    OctaveUp,
+    OctaveDown,
+    MuteToggled(bool),
+    HardwareStatus(bool),
+}
+
+/// Capacity of the Sensor (Core 1) -> UI (Core 0) input event queue.
+pub const UI_INPUT_QUEUE_CAPACITY: usize = 32;
+
+/// Create a lock-free single-producer single-consumer UI input channel.
+pub fn create_ui_input_channel(
+    queue: &'static mut Queue<UiInputEvent, UI_INPUT_QUEUE_CAPACITY>,
+) -> (
+    Producer<'static, UiInputEvent>,
+    Consumer<'static, UiInputEvent>,
+) {
+    queue.split()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,10 +174,36 @@ mod tests {
         let (mut tx, mut rx) = create_config_channel(queue);
 
         assert!(tx.enqueue(ConfigMessage::SetRootNote(RootNote::D)).is_ok());
-        assert!(tx.enqueue(ConfigMessage::SetScale(Scale::Pentatonic)).is_ok());
+        assert!(tx
+            .enqueue(ConfigMessage::SetScale(Scale::Pentatonic))
+            .is_ok());
 
         assert_eq!(rx.dequeue(), Some(ConfigMessage::SetRootNote(RootNote::D)));
-        assert_eq!(rx.dequeue(), Some(ConfigMessage::SetScale(Scale::Pentatonic)));
+        assert_eq!(
+            rx.dequeue(),
+            Some(ConfigMessage::SetScale(Scale::Pentatonic))
+        );
+        assert_eq!(rx.dequeue(), None);
+    }
+
+    #[test]
+    fn test_ui_input_channel_fifo() {
+        let queue: &'static mut Queue<UiInputEvent, UI_INPUT_QUEUE_CAPACITY> =
+            Box::leak(Box::new(Queue::new()));
+        let (mut tx, mut rx) = create_ui_input_channel(queue);
+
+        assert!(tx
+            .enqueue(UiInputEvent::PointerPressed { x: 120.0, y: 240.0 })
+            .is_ok());
+        assert!(tx.enqueue(UiInputEvent::EncoderDelta(1)).is_ok());
+        assert!(tx.enqueue(UiInputEvent::ToggleView).is_ok());
+
+        assert_eq!(
+            rx.dequeue(),
+            Some(UiInputEvent::PointerPressed { x: 120.0, y: 240.0 })
+        );
+        assert_eq!(rx.dequeue(), Some(UiInputEvent::EncoderDelta(1)));
+        assert_eq!(rx.dequeue(), Some(UiInputEvent::ToggleView));
         assert_eq!(rx.dequeue(), None);
     }
 }

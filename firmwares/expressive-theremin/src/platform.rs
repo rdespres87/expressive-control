@@ -12,22 +12,12 @@ use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 
 use esp_idf_sys::{
-    esp_lcd_new_rgb_panel,
-    esp_lcd_panel_del,
-    esp_lcd_panel_disp_on_off,
-    esp_lcd_panel_draw_bitmap,
-    esp_lcd_panel_handle_t,
-    esp_lcd_panel_init,
-    esp_lcd_rgb_panel_config_t,
-    esp_lcd_rgb_panel_config_t__bindgen_ty_1,
-    esp_lcd_rgb_panel_event_callbacks_t,
-    esp_lcd_rgb_panel_event_data_t,
-    esp_lcd_rgb_panel_get_frame_buffer,
-    esp_lcd_rgb_panel_register_event_callbacks,
-    esp_lcd_rgb_timing_t,
-    esp_lcd_rgb_timing_t__bindgen_ty_1,
-    soc_module_clk_t_SOC_MOD_CLK_PLL_F160M,
-    ESP_OK,
+    esp_lcd_new_rgb_panel, esp_lcd_panel_del, esp_lcd_panel_disp_on_off, esp_lcd_panel_draw_bitmap,
+    esp_lcd_panel_handle_t, esp_lcd_panel_init, esp_lcd_rgb_panel_config_t,
+    esp_lcd_rgb_panel_config_t__bindgen_ty_1, esp_lcd_rgb_panel_event_callbacks_t,
+    esp_lcd_rgb_panel_event_data_t, esp_lcd_rgb_panel_get_frame_buffer,
+    esp_lcd_rgb_panel_register_event_callbacks, esp_lcd_rgb_timing_t,
+    esp_lcd_rgb_timing_t__bindgen_ty_1, soc_module_clk_t_SOC_MOD_CLK_PLL_F160M, ESP_OK,
 };
 
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType, Rgb565Pixel};
@@ -133,7 +123,9 @@ unsafe impl Send for LcdDriver {}
 
 impl LcdDriver {
     pub fn new() -> Option<Self> {
-        log::info!("=== LcdDriver::new() START (Double Buffer + 20-line Bounce Buffer + VSYNC) ===");
+        log::info!(
+            "=== LcdDriver::new() START (Double Buffer + 20-line Bounce Buffer + VSYNC) ==="
+        );
 
         let mut timing_flags = esp_lcd_rgb_timing_t__bindgen_ty_1::default();
         timing_flags.set_pclk_active_neg(1);
@@ -155,8 +147,8 @@ impl LcdDriver {
         config_flags.set_fb_in_psram(1);
 
         let data_gpio_nums = [
-            LCD_D0, LCD_D1, LCD_D2, LCD_D3, LCD_D4, LCD_D5, LCD_D6, LCD_D7,
-            LCD_D8, LCD_D9, LCD_D10, LCD_D11, LCD_D12, LCD_D13, LCD_D14, LCD_D15,
+            LCD_D0, LCD_D1, LCD_D2, LCD_D3, LCD_D4, LCD_D5, LCD_D6, LCD_D7, LCD_D8, LCD_D9,
+            LCD_D10, LCD_D11, LCD_D12, LCD_D13, LCD_D14, LCD_D15,
         ];
 
         let config = esp_lcd_rgb_panel_config_t {
@@ -164,7 +156,7 @@ impl LcdDriver {
             timings,
             data_width: 16,
             bits_per_pixel: 16,
-            num_fbs: 2, // Double buffering in PSRAM
+            num_fbs: 2,                        // Double buffering in PSRAM
             bounce_buffer_size_px: H_RES * 20, // 20 lines in internal DRAM (32KB) prevents DMA starvation
             sram_trans_align: 4,
             psram_trans_align: 64,
@@ -181,7 +173,11 @@ impl LcdDriver {
         log::info!("Calling esp_lcd_new_rgb_panel...");
         let ret = unsafe { esp_lcd_new_rgb_panel(&config, &mut panel) };
         if ret != ESP_OK || panel.is_null() {
-            log::error!("esp_lcd_new_rgb_panel FAILED: ret={}, panel={:?}", ret, panel);
+            log::error!(
+                "esp_lcd_new_rgb_panel FAILED: ret={}, panel={:?}",
+                ret,
+                panel
+            );
             return None;
         }
         log::info!("esp_lcd_new_rgb_panel SUCCESS, panel={:?}", panel);
@@ -196,8 +192,14 @@ impl LcdDriver {
         // Initialize GPIO2 as strong push-pull output, initially OFF (LOW) to avoid flash at boot
         unsafe {
             esp_idf_sys::gpio_reset_pin(LCD_BACKLIGHT);
-            esp_idf_sys::gpio_set_direction(LCD_BACKLIGHT, esp_idf_sys::gpio_mode_t_GPIO_MODE_OUTPUT);
-            esp_idf_sys::gpio_set_drive_capability(LCD_BACKLIGHT, esp_idf_sys::gpio_drive_cap_t_GPIO_DRIVE_CAP_3);
+            esp_idf_sys::gpio_set_direction(
+                LCD_BACKLIGHT,
+                esp_idf_sys::gpio_mode_t_GPIO_MODE_OUTPUT,
+            );
+            esp_idf_sys::gpio_set_drive_capability(
+                LCD_BACKLIGHT,
+                esp_idf_sys::gpio_drive_cap_t_GPIO_DRIVE_CAP_3,
+            );
             esp_idf_sys::gpio_set_level(LCD_BACKLIGHT, 0);
         }
         log::info!("Backlight initialized (GPIO2 LOW, held off until UI renders)");
@@ -225,11 +227,7 @@ impl LcdDriver {
             return None;
         }
 
-        log::info!(
-            "Double frame buffers allocated: fb1={:?}, fb2={:?}",
-            b1,
-            b2
-        );
+        log::info!("Double frame buffers allocated: fb1={:?}, fb2={:?}", b1, b2);
 
         let pixel_count = H_RES * V_RES;
         unsafe {
@@ -352,8 +350,6 @@ pub fn set_backlight(on: bool) {
         esp_idf_sys::gpio_set_level(LCD_BACKLIGHT, if on { 1 } else { 0 });
     }
 }
-
-
 
 // ─── Slint Platform Implementation ──────────────────────────────────────────
 
@@ -478,4 +474,3 @@ pub fn clear_framebuffers() {
         }
     });
 }
-

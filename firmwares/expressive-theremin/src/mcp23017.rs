@@ -147,7 +147,10 @@ impl Mcp23017Driver {
 
     /// Reset and configure `IOCON`: BANK=0 (sequential registers), SEQOP=0 (auto-increment).
     pub fn init(&mut self, i2c: &mut I2cDriver) -> Result<(), EspError> {
-        log::info!("[MCP23017] Initializing generic expander @ 0x{:02X}...", self.addr);
+        log::info!(
+            "[MCP23017] Initializing generic expander @ 0x{:02X}...",
+            self.addr
+        );
         i2c.write(self.addr, &[regs::IOCON, 0x00], 50)
     }
 
@@ -244,12 +247,7 @@ impl Mcp23017Driver {
     }
 
     /// Write raw 8-bit values to an output latch (OLATA or OLATB).
-    pub fn write_port(
-        &mut self,
-        i2c: &mut I2cDriver,
-        port: Port,
-        val: u8,
-    ) -> Result<(), EspError> {
+    pub fn write_port(&mut self, i2c: &mut I2cDriver, port: Port, val: u8) -> Result<(), EspError> {
         let reg = match port {
             Port::A => {
                 self.olat_a = val;
@@ -264,12 +262,7 @@ impl Mcp23017Driver {
     }
 
     /// Set an individual output pin high or low without extra read-modify-write I2C transactions.
-    pub fn write_pin(
-        &mut self,
-        i2c: &mut I2cDriver,
-        pin: Pin,
-        high: bool,
-    ) -> Result<(), EspError> {
+    pub fn write_pin(&mut self, i2c: &mut I2cDriver, pin: Pin, high: bool) -> Result<(), EspError> {
         let (port, idx) = pin.port_and_index();
         let bit = 1 << idx;
         let mut cur = match port {

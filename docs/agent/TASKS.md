@@ -53,6 +53,10 @@
   - Implement Theremin front-panel driver composing buttons (Octave +, Octave -, Mute) and rotary encoder (UI navigation).
   - Implement resilient hardware-absent fallback with Slint UI warning banner.
 - [x] **RP2040-Zero Inter-MCU Protocol**: Validated I2C Target link (Slave @ `0x40`) at 400 kHz to prevent hardware UART0 / CH340G bus contention.
+- [x] **Dual-Core Asynchronous Decoupling (Real-Time Sensor & 60 FPS UI)**:
+  - Pin sensor polling (GT911 touch, MCP23017, ToF ranging) and musical DSP to **Core 1** (`APP_CPU`) at 100 Hz (10ms), isolated from LCD VSYNC.
+  - Pin Slint UI and LCD RGB DMA flush to **Core 0** (`PRO_CPU`) at 60 FPS.
+  - Inter-core communication: wait-free SeqLock `AtomicTunerSnapshot` for musical state, lock-free SPSC `heapless::spsc::Queue` for touch/encoder UI input events and configuration changes.
 - [ ] **USB-MIDI Firmware (RP2040-Zero)**:
   - Implement RP2040 I2C Target firmware receiving 3-byte MIDI packets and streaming Class-Compliant USB-MIDI to host DAW.
 

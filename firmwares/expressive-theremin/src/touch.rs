@@ -36,7 +36,10 @@ pub fn scan_i2c_bus(i2c: &mut I2cDriver) -> Vec<u8> {
             found.push(addr);
         }
     }
-    log::info!("=== [I2C Scanner] Scan complete: {} device(s) found ===", found.len());
+    log::info!(
+        "=== [I2C Scanner] Scan complete: {} device(s) found ===",
+        found.len()
+    );
     found
 }
 
@@ -94,11 +97,22 @@ impl Gt911Driver {
         // Try reading 4 bytes Product ID starting at 0x8140 from 0x5D or 0x14
         for &addr in &[GT911_ADDR_5D, GT911_ADDR_14] {
             let mut prod_id = [0u8; 4];
-            if i2c.write_read(addr, &[0x81, 0x40], &mut prod_id, 50).is_ok() {
-                let id_clean: Vec<u8> = prod_id.iter().copied().take_while(|&b| (32..=126).contains(&b)).collect();
+            if i2c
+                .write_read(addr, &[0x81, 0x40], &mut prod_id, 50)
+                .is_ok()
+            {
+                let id_clean: Vec<u8> = prod_id
+                    .iter()
+                    .copied()
+                    .take_while(|&b| (32..=126).contains(&b))
+                    .collect();
                 if let Ok(id_str) = core::str::from_utf8(&id_clean) {
                     if !id_str.is_empty() {
-                        log::info!("[Touch] GT911 confirmed at address 0x{:02X}, Product ID: '{}'", addr, id_str);
+                        log::info!(
+                            "[Touch] GT911 confirmed at address 0x{:02X}, Product ID: '{}'",
+                            addr,
+                            id_str
+                        );
                         return Ok(Self { addr });
                     }
                 }
@@ -107,14 +121,19 @@ impl Gt911Driver {
 
         // Fallback: The I2C scanner confirmed device at 0x5D
         log::info!("[Touch] Using GT911 at detected address 0x5D");
-        Ok(Self { addr: GT911_ADDR_5D })
+        Ok(Self {
+            addr: GT911_ADDR_5D,
+        })
     }
 
     /// Poll for active touch contact with atomic single-transaction I2C read.
     pub fn poll_touch(&self, i2c: &mut I2cDriver) -> TouchEvent {
         // Read 7 bytes atomically: Status (0x814E), TrackID (0x814F), X_L, X_H, Y_L, Y_H, Size
         let mut report = [0u8; 7];
-        if i2c.write_read(self.addr, &[0x81, 0x4E], &mut report, 20).is_err() {
+        if i2c
+            .write_read(self.addr, &[0x81, 0x4E], &mut report, 20)
+            .is_err()
+        {
             return TouchEvent::NoUpdate;
         }
 

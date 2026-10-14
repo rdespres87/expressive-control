@@ -48,11 +48,7 @@ impl DualTofResetController {
     }
 
     /// Configure XSHUT pins as outputs and hold both in hardware shutdown.
-    pub fn init(
-        &self,
-        expander: &mut Mcp23017Driver,
-        i2c: &mut I2cDriver,
-    ) -> Result<(), EspError> {
+    pub fn init(&self, expander: &mut Mcp23017Driver, i2c: &mut I2cDriver) -> Result<(), EspError> {
         expander.set_pin_direction(i2c, self.pin_left_xshut, Direction::Output)?;
         expander.set_pin_direction(i2c, self.pin_right_xshut, Direction::Output)?;
         expander.write_pin(i2c, self.pin_left_xshut, false)?;

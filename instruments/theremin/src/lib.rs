@@ -441,4 +441,214 @@ mod tests {
             _ => panic!("Expected NoteOn"),
         }
     }
+
+    #[test]
+    fn test_mute_behavior_sends_note_off() {
+        let mut processor = TofThereminProcessor::default();
+        let mut buffer = [InstrumentEvent::NoteOff {
+            channel: Channel::new(0),
+            note: U7::new(0),
+            velocity: U7::new(0),
+        }; 4];
+        let mut t = expressive_core::telemetry::NoopTelemetry;
+
+        // 1. Establish pitch hand at 500mm and volume hand at 20mm (full volume = 127)
+        processor
+            .process_event(
+                SensorEvent::Position3D {
+                    id: 0,
+                    x: 0,
+                    y: 0,
+                    z: 500,
+                },
+                &mut buffer,
+                &mut t,
+            )
+            .unwrap();
+        let count = processor
+            .process_event(
+                SensorEvent::Position3D {
+                    id: 1,
+                    x: 0,
+                    y: 0,
+                    z: 20,
+                },
+                &mut buffer,
+                &mut t,
+            )
+            .unwrap();
+        assert!(count >= 1);
+        assert!(processor.is_playing());
+        assert_eq!(processor.current_volume(), 127);
+
+        // 2. Mute: hand moves to 1000mm (silence)
+        let count = processor
+            .process_event(
+                SensorEvent::Position3D {
+                    id: 1,
+                    x: 0,
+                    y: 0,
+                    z: 1000,
+                },
+                &mut buffer,
+                &mut t,
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+        match buffer[0] {
+            InstrumentEvent::NoteOff { velocity, .. } => {
+                assert_eq!(velocity.as_u8(), 0);
+            }
+            _ => panic!("Expected NoteOff upon volume reaching 1000mm"),
+        }
+        assert_eq!(processor.current_volume(), 0);
+
+        // 3. Pitch changes while muted: no new NoteOn should be emitted
+        let count = processor
+            .process_event(
+                SensorEvent::Position3D {
+                    id: 0,
+                    x: 0,
+                    y: 0,
+                    z: 600,
+                },
+                &mut buffer,
+                &mut t,
+            )
+            .unwrap();
+        assert_eq!(count, 0);
+
+        // 4. Un-mute: hand returns to 200mm -> NoteOn must be re-triggered
+        let count = processor
+            .process_event(
+                SensorEvent::Position3D {
+                    id: 1,
+                    x: 0,
+                    y: 0,
+                    z: 200,
+                },
+                &mut buffer,
+                &mut t,
+            )
+            .unwrap();
+        assert!(count >= 1);
+        match buffer[0] {
+            InstrumentEvent::NoteOn { velocity, .. } => {
+                assert!(velocity.as_u8() > 0);
+            }
+            _ => panic!("Expected NoteOn upon unmuting"),
+        }
+    }
+
+    #[test]
+    fn test_sensor_event_released_volume_and_pitch() {
+        let mut processor = TofThereminProcessor::default();
+        let mut buffer = [InstrumentEvent::NoteOff {
+            channel: Channel::new(0),
+            note: U7::new(0),
+            velocity: U7::new(0),
+        }; 4];
+        let mut t = expressive_core::telemetry::NoopTelemetry;
+
+        // Start playing
+        processor
+            .process_event(
+                SensorEvent::Position3D {
+                    id: 0,
+                    x: 0,
+                    y: 0,
+                    z: 500,
+                },
+                &mut buffer,
+                &mut t,
+            )
+            .unwrap();
+        processor
+            .process_event(
+                SensorEvent::Position3D {
+                    id: 1,
+                    x: 0,
+                    y: 0,
+                    z: 100,
+                },
+                &mut buffer,
+                &mut t,
+            )
+            .unwrap();
+        assert!(processor.current_volume() > 0);
+
+        // Release volume hand -> sends NoteOff
+        let count = processor
+            .process_event(SensorEvent::Released { id: 1 }, &mut buffer, &mut t)
+            .unwrap();
+        assert_eq!(count, 1);
+        assert!(matches!(buffer[0], InstrumentEvent::NoteOff { .. }));
+        assert_eq!(processor.current_volume(), 0);
+
+        // Release pitch hand -> marks is_playing false
+        let _ = processor
+            .process_event(SensorEvent::Released { id: 0 }, &mut buffer, &mut t)
+            .unwrap();
+        assert!(!processor.is_playing());
+    }
+
+    #[test]
+    fn test_configuration_updates() {
+        let mut processor = TofThereminProcessor::default();
+
+        // Base octave
+        processor.handle_config(ConfigMessage::SetBaseOctave(5));
+        assert_eq!(processor.base_octave, 5);
+        let (n, _) = processor.map_distance_to_note_and_bend(1000);
+        assert_eq!(n.as_u8(), 72);
+
+        // Scale and root note
+        processor.handle_config(ConfigMessage::SetScale(Scale::Minor));
+        assert_eq!(processor.scale, Scale::Minor);
+        processor.handle_config(ConfigMessage::SetRootNote(RootNote::A));
+        assert_eq!(processor.root_note, RootNote::A);
+
+        // Quantization and filter
+        processor.handle_config(ConfigMessage::SetPitchQuantization(85));
+        assert_eq!(processor.pitch_quantization, 85);
+        processor.handle_config(ConfigMessage::SetFilterSpeed(FilterSpeed::Slow));
+        assert_eq!(processor.filter_speed, FilterSpeed::Slow);
+    }
+
+    #[test]
+    fn test_buffer_too_small_returns_error() {
+        let mut processor = TofThereminProcessor::default();
+        let mut tiny_buffer = [];
+        let mut t = expressive_core::telemetry::NoopTelemetry;
+
+        let result = processor.process_event(
+            SensorEvent::Position3D {
+                id: 0,
+                x: 0,
+                y: 0,
+                z: 500,
+            },
+            &mut tiny_buffer,
+            &mut t,
+        );
+        // id=0 without volume does not write, but when volume > 0, it requires buffer
+        assert!(result.is_ok());
+
+        // Now set volume > 0
+        processor.current_volume = U7::new(100);
+        let result = processor.process_event(
+            SensorEvent::Position3D {
+                id: 0,
+                x: 0,
+                y: 0,
+                z: 500,
+            },
+            &mut tiny_buffer,
+            &mut t,
+        );
+        assert_eq!(
+            result,
+            Err(expressive_core::processor::ProcessorError::BufferTooSmall)
+        );
+    }
 }

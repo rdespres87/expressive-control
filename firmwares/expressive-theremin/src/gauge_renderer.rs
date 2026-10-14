@@ -162,7 +162,7 @@ impl TuningStatus {
     pub fn color(self) -> RgbColor {
         match self {
             TuningStatus::Inactive => RgbColor::new(70, 70, 95),
-            TuningStatus::InTune => RgbColor::new(0, 255, 136),   // Neon green
+            TuningStatus::InTune => RgbColor::new(0, 255, 136), // Neon green
             TuningStatus::NearTune => RgbColor::new(255, 170, 0), // Warm orange
             TuningStatus::OutOfTune => RgbColor::new(255, 51, 68), // Crimson red
         }
@@ -411,11 +411,7 @@ pub fn draw_strobe_gauge(
             kind.default_color(col_center_ref, col_tick_major, col_tick_idle)
         };
 
-        draw_aa_segment(
-            buf,
-            stride,
-            LineSegment::new(start, end, thickness, color),
-        );
+        draw_aa_segment(buf, stride, LineSegment::new(start, end, thickness, color));
     }
 
     // 3. Pivoting Needle (Heavy instrument-style 10.0px needle with 18.0px diamond head)
@@ -437,18 +433,10 @@ pub fn draw_strobe_gauge(
         );
 
         // Center hub dot (R = 90px, radius 8.0px -> diameter 16.0px)
-        draw_aa_circle(
-            buf,
-            stride,
-            FilledCircle::new(n_start, 8.0, col_center_ref),
-        );
+        draw_aa_circle(buf, stride, FilledCircle::new(n_start, 8.0, col_center_ref));
 
         // Profiled Needle Tip (pointer at R = 236px, radius 9.0px -> diameter 18.0px)
-        draw_aa_circle(
-            buf,
-            stride,
-            FilledCircle::new(n_end, 9.0, col_center_ref),
-        );
+        draw_aa_circle(buf, stride, FilledCircle::new(n_end, 9.0, col_center_ref));
     }
 }
 

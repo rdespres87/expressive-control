@@ -248,7 +248,7 @@ impl embedded_hal_async::i2c::I2c for AsyncI2cWrapper<'_> {
 }
 
 // --- Sensors ---
- 
+
 fn new_sensor<'a>(bus: &'a I2cBus, addr: u8) -> Sensor<'a> {
     vl53l4cd::Vl53l4cd::with_addr(
         AsyncI2cWrapper(bus),
@@ -261,7 +261,10 @@ fn new_sensor<'a>(bus: &'a I2cBus, addr: u8) -> Sensor<'a> {
 /// Initialises the sensor currently answering on the default address and moves it
 /// to `new_addr`. `set_device_address` was removed in vl53l4cd v0.4, so the register
 /// is written directly.
-async fn init_and_readdress<'a>(bus: &'a I2cBus, new_addr: u8) -> Result<Sensor<'a>, FirmwareError> {
+async fn init_and_readdress<'a>(
+    bus: &'a I2cBus,
+    new_addr: u8,
+) -> Result<Sensor<'a>, FirmwareError> {
     let mut sensor = new_sensor(bus, VL53L4CD_DEFAULT_ADDR);
     sensor
         .init()
@@ -345,7 +348,9 @@ fn ui_thread(_sensor_state: Arc<Mutex<SensorState>>) -> Result<(), FirmwareError
     log::info!("[UI Thread] Storing weak ref to MasterWindow...");
     let window_weak = ui.as_weak();
     {
-        let mut weak_guard = platform::G_WINDOW_WEAK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut weak_guard = platform::G_WINDOW_WEAK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         *weak_guard = Some(window_weak.clone());
         log::info!("[UI Thread] Weak ref stored (G_WINDOW_WEAK populated)");
     }
@@ -363,7 +368,10 @@ fn ui_thread(_sensor_state: Arc<Mutex<SensorState>>) -> Result<(), FirmwareError
 
     // Force first render (draw_if_needed returns false until redraw is requested)
     log::info!("[UI Thread] Requesting first redraw...");
-    if let Some(ref window_weak) = *platform::G_WINDOW_WEAK.lock().unwrap_or_else(|e| e.into_inner()) {
+    if let Some(ref window_weak) = *platform::G_WINDOW_WEAK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+    {
         if let Some(window) = window_weak.upgrade() {
             log::info!("[UI Thread] Window upgraded successfully");
             window.window().request_redraw();
@@ -392,7 +400,9 @@ fn ui_thread(_sensor_state: Arc<Mutex<SensorState>>) -> Result<(), FirmwareError
         }
 
         // Poll sensor state and apply updates to the Slint window
-        let weak_guard = platform::G_WINDOW_WEAK.lock().unwrap_or_else(|e| e.into_inner());
+        let weak_guard = platform::G_WINDOW_WEAK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(ref window_weak) = *weak_guard {
             platform::poll_ui_updates(window_weak);
         }
@@ -548,44 +558,27 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
     }
     log::info!("[Slave] Slint platform initialized");
 
-    // Initialize Touchscreen (GT911 via PCA9557 I2C), Front Panel (MCP23017), Dual ToF & UART
-    let mut i2c_bus_opt: Option<I2cBus> = None;
-    let mut gt911_opt = None;
+    // Initialize peripherals
+    let mut i2c_driver_opt: Option<I2cDriver<'static>> = None;
     let mut uart_opt = None;
-    let mut front_panel_opt = None;
 
     if let Ok(peripherals) = Peripherals::take() {
         let pins = peripherals.pins;
 
         // 1. Initialize I2C0 for Touch Screen & Peripherals (SDA=GPIO19, SCL=GPIO20 at 400 kHz)
         let i2c_config = esp_idf_hal::i2c::I2cConfig::new().baudrate(400.kHz().into());
-        match esp_idf_hal::i2c::I2cDriver::new(peripherals.i2c0, pins.gpio19, pins.gpio20, &i2c_config) {
-            Ok(mut driver) => {
-                log::info!("[Slave] I2C0 driver initialized on SDA=GPIO19, SCL=GPIO20 (400 kHz)");
-                // Pre-reset I2C scan
-                touch::scan_i2c_bus(&mut driver);
-                // Hardware reset of GT911 via PCA9557
-                if let Err(e) = touch::reset_gt911_via_pca9557(&mut driver) {
-                    log::warn!("[Slave] PCA9557 reset failed: {:?}", e);
-                }
-                // Post-reset I2C scan (GT911 should now be responsive at 0x5D)
-                touch::scan_i2c_bus(&mut driver);
-
-                // Initialize Theremin Front Panel (assembling generic MCP23017, buttons, encoder & ToF reset)
-                let mut front_panel = front_panel::ThereminFrontPanel::new(mcp23017::MCP23017_DEFAULT_ADDR);
-                if let Err(e) = front_panel.init(&mut driver) {
-                    log::info!("[Slave] MCP23017 front panel not detected at 0x20 (hardware absent): {:?}", e);
-                } else {
-                    log::info!("[Slave] MCP23017 front panel successfully detected and initialized at 0x20");
-                    front_panel_opt = Some(front_panel);
-                }
-
-                // Initialize GT911 driver
-                gt911_opt = touch::Gt911Driver::init(&mut driver).ok();
-                i2c_bus_opt = Some(RefCell::new(driver));
+        match esp_idf_hal::i2c::I2cDriver::new(
+            peripherals.i2c0,
+            pins.gpio19,
+            pins.gpio20,
+            &i2c_config,
+        ) {
+            Ok(driver) => {
+                log::info!("[Display] I2C0 driver initialized on SDA=GPIO19, SCL=GPIO20 (400 kHz)");
+                i2c_driver_opt = Some(driver);
             }
             Err(e) => {
-                log::warn!("[Slave] Failed to initialize I2C0: {:?}", e);
+                log::warn!("[Display] Failed to initialize I2C0: {:?}", e);
             }
         }
 
@@ -609,86 +602,7 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
             }
         }
     } else {
-        log::warn!("[Slave] Peripherals::take() failed or already taken");
-    }
-
-    // Sequential ToF hardware initialization with resilient absent detection
-    let mut tof_vol_opt = None;
-    let mut tof_pitch_opt = None;
-    let hardware_connected;
-
-    if let (Some(bus), Some(fp)) = (i2c_bus_opt.as_ref(), front_panel_opt.as_mut()) {
-        log::info!("[Slave] Initiating dual ST VL53L4CD sequential boot & dynamic address assignment...");
-
-        // 1. Release Left ToF (Volume) via MCP23017 GPA0
-        let left_release_ok = {
-            if let Ok(mut driver) = bus.try_borrow_mut() {
-                fp.tof_controller.release_left(&mut fp.expander, &mut driver).is_ok()
-            } else {
-                false
-            }
-        };
-
-        if left_release_ok {
-            // ST VL53L4CD firmware boot time margin (min 1.2 ms, wait 5 ms)
-            FreeRtos::delay_ms(5);
-            log::info!("[Slave] Initializing Left ToF @ default 0x29 -> moving to 0x{:02X}...", VOLUME_SENSOR_ADDR);
-            match init_and_readdress(bus, VOLUME_SENSOR_ADDR).await {
-                Ok(mut s) => {
-                    if let Err(e) = start_ranging(&mut s, "left_volume").await {
-                        log::warn!("[Slave] Failed to start ranging on Left ToF: {:?}", e);
-                    } else {
-                        log::info!("[Slave] Left ToF (Volume) initialized and ranging at 0x{:02X}", VOLUME_SENSOR_ADDR);
-                        tof_vol_opt = Some(s);
-                    }
-                }
-                Err(e) => {
-                    log::warn!("[Slave] Left ToF (Volume) init/readdress failed: {:?}", e);
-                }
-            }
-        } else {
-            log::warn!("[Slave] Failed to release Left ToF reset line");
-        }
-
-        // 2. Release Right ToF (Pitch) via MCP23017 GPA1
-        let right_release_ok = {
-            if let Ok(mut driver) = bus.try_borrow_mut() {
-                fp.tof_controller.release_right(&mut fp.expander, &mut driver).is_ok()
-            } else {
-                false
-            }
-        };
-
-        if right_release_ok {
-            FreeRtos::delay_ms(5);
-            log::info!("[Slave] Initializing Right ToF @ default 0x29 -> moving to 0x{:02X}...", PITCH_SENSOR_ADDR);
-            match init_and_readdress(bus, PITCH_SENSOR_ADDR).await {
-                Ok(mut s) => {
-                    if let Err(e) = start_ranging(&mut s, "right_pitch").await {
-                        log::warn!("[Slave] Failed to start ranging on Right ToF: {:?}", e);
-                    } else {
-                        log::info!("[Slave] Right ToF (Pitch) initialized and ranging at 0x{:02X}", PITCH_SENSOR_ADDR);
-                        tof_pitch_opt = Some(s);
-                    }
-                }
-                Err(e) => {
-                    log::warn!("[Slave] Right ToF (Pitch) init/readdress failed: {:?}", e);
-                }
-            }
-        } else {
-            log::warn!("[Slave] Failed to release Right ToF reset line");
-        }
-
-        if tof_vol_opt.is_some() && tof_pitch_opt.is_some() {
-            hardware_connected = true;
-            log::info!("[Slave] All hardware peripherals ACTIVE: MCP23017 + Dual VL53L4CD (0x{:02X}, 0x{:02X})", VOLUME_SENSOR_ADDR, PITCH_SENSOR_ADDR);
-        } else {
-            hardware_connected = false;
-            log::warn!("[Slave] One or more ToF sensors not responding: fallback to Simulation Mode");
-        }
-    } else {
-        hardware_connected = false;
-        log::info!("[Slave] MCP23017 front panel not present: fallback to Simulation Mode");
+        log::warn!("[Display] Peripherals::take() failed or already taken");
     }
 
     // Create the Slint UI (Unified MainWindow with Master & Slave views)
@@ -707,11 +621,13 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
     window.set_frequency("-- Hz".into());
     window.set_transpose("+0".into());
     window.set_is_master_view(true);
-    window.set_hardware_connected(hardware_connected);
+    window.set_hardware_connected(false); // Updated asynchronously by Core 1 once probed
 
     // Initial i18n (French by default)
     let current_language = Arc::new(Mutex::new(i18n::Language::French));
-    window.set_i18n(i18n::to_slint_i18n(i18n::get_ui_strings(i18n::Language::French)));
+    window.set_i18n(i18n::to_slint_i18n(i18n::get_ui_strings(
+        i18n::Language::French,
+    )));
 
     let lang_state = Arc::clone(&current_language);
     let win_lang = window.as_weak();
@@ -738,8 +654,10 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
     window.set_pb_range(2);
 
     // Initialize lock-free SPSC queue for UI -> Audio Processor config messages (safe static allocation)
-    let queue: &'static mut heapless::spsc::Queue<ConfigMessage, { concurrency::CONFIG_QUEUE_CAPACITY }> =
-        Box::leak(Box::new(heapless::spsc::Queue::new()));
+    let queue: &'static mut heapless::spsc::Queue<
+        ConfigMessage,
+        { concurrency::CONFIG_QUEUE_CAPACITY },
+    > = Box::leak(Box::new(heapless::spsc::Queue::new()));
     let (config_tx, config_rx) = concurrency::create_config_channel(queue);
     let config_tx = Arc::new(Mutex::new(config_tx));
 
@@ -747,7 +665,10 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
     let tx_oct = Arc::clone(&config_tx);
     window.on_octave_changed(move |octave| {
         log::info!("[UI Master] Base Octave changed: {}", octave);
-        let _ = tx_oct.lock().unwrap().enqueue(ConfigMessage::SetBaseOctave(octave));
+        let _ = tx_oct
+            .lock()
+            .unwrap()
+            .enqueue(ConfigMessage::SetBaseOctave(octave));
     });
 
     let tx_scale = Arc::clone(&config_tx);
@@ -781,13 +702,19 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
             "B" => RootNote::B,
             _ => RootNote::C,
         };
-        let _ = tx_root.lock().unwrap().enqueue(ConfigMessage::SetRootNote(r));
+        let _ = tx_root
+            .lock()
+            .unwrap()
+            .enqueue(ConfigMessage::SetRootNote(r));
     });
 
     let tx_range = Arc::clone(&config_tx);
     window.on_range_changed(move |r| {
         log::info!("[UI Master] Octave Range changed: {}", r);
-        let _ = tx_range.lock().unwrap().enqueue(ConfigMessage::SetOctaveRange(r));
+        let _ = tx_range
+            .lock()
+            .unwrap()
+            .enqueue(ConfigMessage::SetOctaveRange(r));
     });
 
     let tx_pb = Arc::clone(&config_tx);
@@ -807,7 +734,10 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
                     pitch_bend_range: r as u8,
                 }
             };
-            let _ = tx_pb.lock().unwrap().enqueue(ConfigMessage::SetProcessorMode(proc_mode));
+            let _ = tx_pb
+                .lock()
+                .unwrap()
+                .enqueue(ConfigMessage::SetProcessorMode(proc_mode));
         }
     });
 
@@ -828,14 +758,20 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
                     pitch_bend_range: r as u8,
                 }
             };
-            let _ = tx_mode.lock().unwrap().enqueue(ConfigMessage::SetProcessorMode(target_mode));
+            let _ = tx_mode
+                .lock()
+                .unwrap()
+                .enqueue(ConfigMessage::SetProcessorMode(target_mode));
         }
     });
 
     let tx_quant = Arc::clone(&config_tx);
     window.on_quantization_changed(move |q| {
         log::info!("[UI Master] Quantization changed: {}%", q);
-        let _ = tx_quant.lock().unwrap().enqueue(ConfigMessage::SetPitchQuantization(q));
+        let _ = tx_quant
+            .lock()
+            .unwrap()
+            .enqueue(ConfigMessage::SetPitchQuantization(q));
     });
 
     let tx_filter = Arc::clone(&config_tx);
@@ -847,7 +783,10 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
             "Fast" => FilterSpeed::Fast,
             _ => FilterSpeed::Fast,
         };
-        let _ = tx_filter.lock().unwrap().enqueue(ConfigMessage::SetFilterSpeed(s));
+        let _ = tx_filter
+            .lock()
+            .unwrap()
+            .enqueue(ConfigMessage::SetFilterSpeed(s));
     });
 
     let win_switch = window.as_weak();
@@ -869,7 +808,9 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
     // Store weak reference for platform updates
     let window_weak = window.as_weak();
     {
-        let mut weak_guard = platform::G_WINDOW_WEAK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut weak_guard = platform::G_WINDOW_WEAK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         *weak_guard = Some(window_weak.clone());
     }
 
@@ -888,81 +829,233 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
     log::info!("[UI] Backlight enabled (initial UI painted, zero flash)");
 
     if is_single_screen {
-        log::info!("[UI] Running single-screen instrument loop with touch & front panel...");
-        run_single_screen_loop(
+        let snapshot = Arc::new(concurrency::AtomicTunerSnapshot::new());
+        let snapshot_core1 = Arc::clone(&snapshot);
+
+        let ui_input_queue: &'static mut heapless::spsc::Queue<
+            concurrency::UiInputEvent,
+            { concurrency::UI_INPUT_QUEUE_CAPACITY },
+        > = Box::leak(Box::new(heapless::spsc::Queue::new()));
+        let (ui_input_tx, ui_input_rx) = concurrency::create_ui_input_channel(ui_input_queue);
+
+        log::info!("[Core 1] Spawning real-time sensor DSP task on Core 1 (APP_CPU)...");
+        esp_idf_hal::task::thread::ThreadSpawnConfiguration {
+            name: Some(c"core1_sensor_dsp"),
+            stack_size: 8192,
+            priority: 15,
+            pin_to_core: Some(esp_idf_hal::cpu::Core::Core1),
+            ..Default::default()
+        }
+        .set()
+        .map_err(|e| FirmwareError {
+            step: "Core 1 ThreadSpawnConfiguration",
+            source: ErrorSource::Esp(e),
+        })?;
+
+        let _core1_handle = std::thread::spawn(move || {
+            core1_sensor_dsp_task(i2c_driver_opt, snapshot_core1, config_rx, ui_input_tx);
+        });
+
+        // Reset spawn config for default threads
+        esp_idf_hal::task::thread::ThreadSpawnConfiguration::default()
+            .set()
+            .ok();
+
+        log::info!("[Core 0] Entering 60 FPS UI render loop...");
+        run_core0_ui_render_loop(&window, snapshot, config_tx, ui_input_rx).await;
+    } else {
+        log::info!("[UI] Running UART telemetry listener loop with touch...");
+        let i2c_bus = i2c_driver_opt.map(RefCell::new);
+        let mut gt911_opt = None;
+        if let Some(ref bus) = i2c_bus {
+            if let Ok(mut driver) = bus.try_borrow_mut() {
+                if let Ok(gt) = touch::Gt911Driver::init(&mut driver) {
+                    gt911_opt = Some(gt);
+                }
+            }
+        }
+        run_slave_telemetry_loop(
             &window,
-            i2c_bus_opt.as_ref(),
+            i2c_bus.as_ref(),
             gt911_opt.as_ref(),
-            front_panel_opt,
-            tof_vol_opt,
-            tof_pitch_opt,
+            uart_opt,
             config_rx,
         )
         .await;
-    } else {
-        log::info!("[UI] Running UART telemetry listener loop with touch...");
-        run_slave_telemetry_loop(&window, i2c_bus_opt.as_ref(), gt911_opt.as_ref(), uart_opt, config_rx).await;
     }
 
     Ok(())
 }
 
-/// Single-screen standalone instrument loop with live touch interaction, front panel inputs,
-/// and dual ST VL53L4CD ToF sensors (or resilient fallback simulation).
-async fn run_single_screen_loop<'a>(
-    window: &MainWindow,
-    bus: Option<&'a I2cBus>,
-    gt911: Option<&touch::Gt911Driver>,
-    mut front_panel: Option<front_panel::ThereminFrontPanel>,
-    mut tof_vol: Option<Sensor<'a>>,
-    mut tof_pitch: Option<Sensor<'a>>,
+/// Core 1 (APP_CPU) Real-Time Sensor & DSP Task.
+/// Runs at ~100 Hz (10ms) completely isolated from LCD VSYNC and UI rendering.
+/// - Polls GT911 touch screen and pushes touch events lock-free to Core 0 via `ui_input_tx`.
+/// - Polls MCP23017 front panel (encoder & buttons) and pushes input events lock-free.
+/// - Measures ToF pitch/volume sensors (or synthetic fallback).
+/// - Runs musical DSP calculations via `TofThereminProcessor`.
+/// - Publishes wait-free state updates to `snapshot` (SeqLock).
+fn core1_sensor_dsp_task(
+    i2c_driver_opt: Option<I2cDriver<'static>>,
+    snapshot: Arc<concurrency::AtomicTunerSnapshot>,
     mut config_rx: heapless::spsc::Consumer<'static, ConfigMessage>,
+    mut ui_input_tx: heapless::spsc::Producer<'static, concurrency::UiInputEvent>,
 ) {
+    log::info!("[Core 1] Sensor & DSP task started on Core 1");
+
+    let i2c_bus = i2c_driver_opt.map(RefCell::new);
+    let mut gt911_opt = None;
+    let mut front_panel_opt = None;
+    let mut tof_vol_opt = None;
+    let mut tof_pitch_opt = None;
+    let mut hw_connected = false;
+
+    if let Some(ref bus) = i2c_bus {
+        // 1. Touchscreen GT911
+        if let Ok(mut driver) = bus.try_borrow_mut() {
+            match touch::Gt911Driver::init(&mut driver) {
+                Ok(gt) => {
+                    log::info!("[Core 1] GT911 touch screen initialized successfully");
+                    gt911_opt = Some(gt);
+                }
+                Err(e) => {
+                    log::warn!("[Core 1] GT911 touch screen init failed: {:?}", e);
+                }
+            }
+        }
+
+        // 2. Front Panel MCP23017
+        let mut fp = front_panel::ThereminFrontPanel::default();
+        let mut fp_ok = false;
+        if let Ok(mut driver) = bus.try_borrow_mut() {
+            match fp.init(&mut driver) {
+                Ok(()) => {
+                    log::info!("[Core 1] MCP23017 front panel initialized");
+                    fp_ok = true;
+                }
+                Err(e) => {
+                    log::warn!(
+                        "[Core 1] MCP23017 front panel init failed (hardware absent?): {:?}",
+                        e
+                    );
+                }
+            }
+        }
+
+        // 3. ToF sensors sequential boot via MCP23017 XSHUT lines
+        if fp_ok {
+            // Sequential boot: Volume sensor (Left)
+            let vol_boot = if let Ok(mut driver) = bus.try_borrow_mut() {
+                fp.tof_controller
+                    .release_left(&mut fp.expander, &mut driver)
+                    .is_ok()
+            } else {
+                false
+            };
+
+            if vol_boot {
+                FreeRtos::delay_ms(5);
+                match block_on(init_and_readdress(bus, VOLUME_SENSOR_ADDR)) {
+                    Ok(mut s) => {
+                        if block_on(start_ranging(&mut s, "volume sensor")).is_ok() {
+                            log::info!(
+                                "[Core 1] Left (Volume) ToF sensor initialized at 0x{:02X}",
+                                VOLUME_SENSOR_ADDR
+                            );
+                            tof_vol_opt = Some(s);
+                        }
+                    }
+                    Err(e) => log::warn!("[Core 1] Failed to init Left ToF sensor: {:?}", e),
+                }
+            }
+
+            // Sequential boot: Pitch sensor (Right)
+            let pitch_boot = if let Ok(mut driver) = bus.try_borrow_mut() {
+                fp.tof_controller
+                    .release_right(&mut fp.expander, &mut driver)
+                    .is_ok()
+            } else {
+                false
+            };
+
+            if pitch_boot {
+                FreeRtos::delay_ms(5);
+                match block_on(init_and_readdress(bus, PITCH_SENSOR_ADDR)) {
+                    Ok(mut s) => {
+                        if block_on(start_ranging(&mut s, "pitch sensor")).is_ok() {
+                            log::info!(
+                                "[Core 1] Right (Pitch) ToF sensor initialized at 0x{:02X}",
+                                PITCH_SENSOR_ADDR
+                            );
+                            tof_pitch_opt = Some(s);
+                        }
+                    }
+                    Err(e) => log::warn!("[Core 1] Failed to init Right ToF sensor: {:?}", e),
+                }
+            }
+
+            front_panel_opt = Some(fp);
+        }
+
+        hw_connected = gt911_opt.is_some()
+            || front_panel_opt.is_some()
+            || tof_vol_opt.is_some()
+            || tof_pitch_opt.is_some();
+    }
+
+    log::info!(
+        "[Core 1] Hardware probe completed: hw_connected = {}",
+        hw_connected
+    );
+    let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::HardwareStatus(hw_connected));
+
     let mut processor = TofThereminProcessor::default();
     let mut step: u32 = 0;
     let mut last_touch: Option<(u16, u16)> = None;
-    let snapshot = concurrency::AtomicTunerSnapshot::new();
-    let mut prev_is_master = window.get_is_master_view();
-    let mut force_redraw_frames: u8 = 0;
     let mut is_muted: bool = false;
 
     loop {
-        // 1. Drain pending UI configuration messages lock-free (zero mutex contention!)
+        // 1. Drain pending UI configuration messages lock-free
         while let Some(msg) = config_rx.dequeue() {
             processor.handle_config(msg);
         }
 
-        // 2. Poll Touchscreen and dispatch Slint Pointer events
-        if let (Some(gt), Some(bus_ref)) = (gt911, bus) {
+        // 2. Poll Touchscreen and push UI input events lock-free
+        if let (Some(gt), Some(bus_ref)) = (gt911_opt.as_ref(), i2c_bus.as_ref()) {
             if let Ok(mut driver) = bus_ref.try_borrow_mut() {
                 match gt.poll_touch(&mut driver) {
                     touch::TouchEvent::Pressed { x, y } => {
+                        let (fx, fy) = (x as f32, y as f32);
                         match last_touch {
                             None => {
-                                log::info!("[Touch] PointerPressed at ({}, {})", x, y);
-                                platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerPressed {
-                                    position: slint::LogicalPosition::new(x as f32, y as f32),
-                                    button: slint::platform::PointerEventButton::Left,
-                                });
+                                let _ = ui_input_tx.enqueue(
+                                    concurrency::UiInputEvent::PointerPressed { x: fx, y: fy },
+                                );
                                 last_touch = Some((x, y));
                             }
                             Some((prev_x, prev_y)) => {
-                                if (x as i32 - prev_x as i32).abs() > 1 || (y as i32 - prev_y as i32).abs() > 1 {
-                                    platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerMoved {
-                                        position: slint::LogicalPosition::new(x as f32, y as f32),
-                                    });
+                                if ((x as i32 - prev_x as i32).abs() > 1
+                                    || (y as i32 - prev_y as i32).abs() > 1)
+                                    && ui_input_tx.ready()
+                                {
+                                    let _ = ui_input_tx.enqueue(
+                                        concurrency::UiInputEvent::PointerMoved { x: fx, y: fy },
+                                    );
                                     last_touch = Some((x, y));
                                 }
                             }
                         }
                     }
                     touch::TouchEvent::Released => {
-                        if let Some((prev_x, prev_y)) = last_touch {
-                            log::info!("[Touch] PointerReleased at ({}, {})", prev_x, prev_y);
-                            platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerReleased {
-                                position: slint::LogicalPosition::new(prev_x as f32, prev_y as f32),
-                                button: slint::platform::PointerEventButton::Left,
-                            });
+                        if last_touch.is_some() {
+                            let mut attempts = 0;
+                            while ui_input_tx
+                                .enqueue(concurrency::UiInputEvent::PointerReleased)
+                                .is_err()
+                                && attempts < 10
+                            {
+                                FreeRtos::delay_ms(1);
+                                attempts += 1;
+                            }
                             last_touch = None;
                         }
                     }
@@ -971,76 +1064,49 @@ async fn run_single_screen_loop<'a>(
             }
         }
 
-        // 3. Poll Front Panel (Buttons & Rotary Encoder for UI navigation)
-        if let (Some(fp), Some(bus_ref)) = (front_panel.as_mut(), bus) {
+        // 3. Poll Front Panel (Buttons & Rotary Encoder)
+        if let (Some(fp), Some(bus_ref)) = (front_panel_opt.as_mut(), i2c_bus.as_ref()) {
             if let Ok(mut driver) = bus_ref.try_borrow_mut() {
                 if let Ok(event) = fp.update(&mut driver) {
-                    // Encoder navigation: rotate to adjust base octave
                     if event.encoder_delta != 0 {
-                        log::info!("[FrontPanel] Encoder rotated: delta = {}", event.encoder_delta);
-                        let cur_oct = window.get_current_octave();
-                        let new_oct = (cur_oct + event.encoder_delta).clamp(0, 8);
-                        if new_oct != cur_oct {
-                            window.set_current_octave(new_oct);
-                            processor.handle_config(ConfigMessage::SetBaseOctave(new_oct));
-                            window.window().request_redraw();
-                        }
+                        let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::EncoderDelta(
+                            event.encoder_delta as i8,
+                        ));
                     }
-                    // Encoder click: toggle between Master view and Tuner view
                     if event.just_encoder_switch {
-                        let new_view = !window.get_is_master_view();
-                        log::info!("[FrontPanel] Encoder switch clicked -> Toggle View (is_master = {})", new_view);
-                        window.set_is_master_view(new_view);
-                        window.window().request_redraw();
+                        let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::ToggleView);
                     }
-                    // Octave + Button
                     if event.just_octave_up {
-                        let cur_oct = window.get_current_octave();
-                        if cur_oct < 8 {
-                            let new_oct = cur_oct + 1;
-                            log::info!("[FrontPanel] Button Octave + -> Octave {}", new_oct);
-                            window.set_current_octave(new_oct);
-                            processor.handle_config(ConfigMessage::SetBaseOctave(new_oct));
-                            window.window().request_redraw();
-                        }
+                        let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::OctaveUp);
                     }
-                    // Octave - Button
                     if event.just_octave_down {
-                        let cur_oct = window.get_current_octave();
-                        if cur_oct > 0 {
-                            let new_oct = cur_oct - 1;
-                            log::info!("[FrontPanel] Button Octave - -> Octave {}", new_oct);
-                            window.set_current_octave(new_oct);
-                            processor.handle_config(ConfigMessage::SetBaseOctave(new_oct));
-                            window.window().request_redraw();
-                        }
+                        let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::OctaveDown);
                     }
-                    // Mute Button: toggles mute state
                     if event.just_mute {
                         is_muted = !is_muted;
-                        log::info!("[FrontPanel] Button Mute pressed -> is_muted = {}", is_muted);
-                        window.window().request_redraw();
+                        let _ =
+                            ui_input_tx.enqueue(concurrency::UiInputEvent::MuteToggled(is_muted));
                     }
                 }
             }
         }
 
-        // 4. Sensor measurement loop (Live VL53L4CD or Synthetic Simulation Fallback)
+        // 4. Sensor measurement (Live VL53L4CD or Synthetic Simulation Fallback)
         let angle = (step as f32) * 0.015;
         let sim_pitch_z = (525.0 + 380.0 * angle.sin()) as u16; // 145mm .. 905mm
         let sim_vol_z = (200.0 + 120.0 * ((step as f32) * 0.025).cos()) as u16; // 80mm .. 320mm
 
         let (pitch_z, vol_z) = if let (Some(ref mut p_sensor), Some(ref mut v_sensor)) =
-            (tof_pitch.as_mut(), tof_vol.as_mut())
+            (tof_pitch_opt.as_mut(), tof_vol_opt.as_mut())
         {
-            let p = match read_pending_distance(p_sensor).await {
+            let p = match block_on(read_pending_distance(p_sensor)) {
                 Ok(d) => d,
                 Err(e) => {
                     log::debug!("[ToF] Pitch read failed: {:?}", e);
                     sim_pitch_z
                 }
             };
-            let v = match read_pending_distance(v_sensor).await {
+            let v = match block_on(read_pending_distance(v_sensor)) {
                 Ok(d) => d,
                 Err(e) => {
                     log::debug!("[ToF] Volume read failed: {:?}", e);
@@ -1062,13 +1128,23 @@ async fn run_single_screen_loop<'a>(
             fn handle(&mut self, _event: expressive_core::telemetry::TelemetryEvent) {}
         }
         let _ = processor.process_event(
-            SensorEvent::Position3D { id: 0, x: 0, y: 0, z: pitch_z },
+            SensorEvent::Position3D {
+                id: 0,
+                x: 0,
+                y: 0,
+                z: pitch_z,
+            },
             &mut events,
             &mut NullTelemetry,
         );
-        let effective_vol_z = if is_muted { 0 } else { vol_z };
+        let effective_vol_z = if is_muted { 1000 } else { vol_z };
         let _ = processor.process_event(
-            SensorEvent::Position3D { id: 1, x: 0, y: 0, z: effective_vol_z },
+            SensorEvent::Position3D {
+                id: 1,
+                x: 0,
+                y: 0,
+                z: effective_vol_z,
+            },
             &mut events,
             &mut NullTelemetry,
         );
@@ -1077,7 +1153,11 @@ async fn run_single_screen_loop<'a>(
         let bend_u16 = processor.current_pitch_bend();
         let pb_range = processor.pitch_bend_range_semitones as f32;
         let cents = ((bend_u16 as f32 - 8192.0) / 8191.0) * pb_range * 100.0;
-        let vol_norm = if is_muted { 0.0 } else { processor.current_volume() as f32 / 127.0 };
+        let vol_norm = if is_muted {
+            0.0
+        } else {
+            processor.current_volume() as f32 / 127.0
+        };
         let active = !is_muted && processor.is_playing() && vol_norm > 0.05;
 
         // Musical tuner calculation: find nearest semitone and detune cents in [-50, +50]
@@ -1085,14 +1165,17 @@ async fn run_single_screen_loop<'a>(
         let display_note = total_semis.round() as i32;
         let display_cents = ((total_semis - display_note as f32) * 100.0).clamp(-50.0, 50.0);
 
-        const NOTE_NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+        const NOTE_NAMES: [&str; 12] = [
+            "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+        ];
         let note_idx = ((display_note % 12 + 12) % 12) as usize;
         let note_name = NOTE_NAMES[note_idx];
         let octave = (display_note / 12) - 1;
-        let freq = 440.0 * (2.0f32).powf((display_note as f32 - 69.0 + display_cents / 100.0) / 12.0);
+        let freq =
+            440.0 * (2.0f32).powf((display_note as f32 - 69.0 + display_cents / 100.0) / 12.0);
         let expression = 0.50 + 0.30 * ((step as f32) * 0.04).sin();
 
-        // 4. Publish lock-free snapshot for the UI thread
+        // 5. Publish wait-free snapshot for the UI thread
         snapshot.write(concurrency::TunerSnapshot {
             note_name,
             octave: octave as i8,
@@ -1103,10 +1186,121 @@ async fn run_single_screen_loop<'a>(
             is_active: active,
         });
 
-        // 5. Update Slint UI from snapshot if Tuner view is visible
+        // 10ms delay = 100 Hz sensor / DSP loop
+        FreeRtos::delay_ms(10);
+        step = step.wrapping_add(1);
+    }
+}
+
+/// Core 0 (PRO_CPU) Pure 60 FPS UI Event & Rendering Loop.
+/// Completely decoupled from I2C bus transactions and sensor polling.
+/// - Drains `ui_input_rx` to dispatch Slint pointer events and handle front panel inputs.
+/// - Reads latest musical state wait-free from `snapshot`.
+/// - Updates Slint animations and renders to LCD framebuffer at 60 FPS.
+async fn run_core0_ui_render_loop(
+    window: &MainWindow,
+    snapshot: Arc<concurrency::AtomicTunerSnapshot>,
+    config_tx: Arc<Mutex<heapless::spsc::Producer<'static, ConfigMessage>>>,
+    mut ui_input_rx: heapless::spsc::Consumer<'static, concurrency::UiInputEvent>,
+) {
+    let mut prev_is_master = window.get_is_master_view();
+    let mut force_redraw_frames: u8 = 0;
+    let mut last_pointer_pos = slint::LogicalPosition::new(0.0, 0.0);
+
+    loop {
+        // 1. Drain pending UI input events from Core 1
+        while let Some(evt) = ui_input_rx.dequeue() {
+            match evt {
+                concurrency::UiInputEvent::PointerPressed { x, y } => {
+                    last_pointer_pos = slint::LogicalPosition::new(x, y);
+                    platform::dispatch_pointer_event(
+                        slint::platform::WindowEvent::PointerPressed {
+                            position: last_pointer_pos,
+                            button: slint::platform::PointerEventButton::Left,
+                        },
+                    );
+                }
+                concurrency::UiInputEvent::PointerMoved { x, y } => {
+                    last_pointer_pos = slint::LogicalPosition::new(x, y);
+                    platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerMoved {
+                        position: last_pointer_pos,
+                    });
+                }
+                concurrency::UiInputEvent::PointerReleased => {
+                    platform::dispatch_pointer_event(
+                        slint::platform::WindowEvent::PointerReleased {
+                            position: last_pointer_pos,
+                            button: slint::platform::PointerEventButton::Left,
+                        },
+                    );
+                }
+                concurrency::UiInputEvent::EncoderDelta(delta) => {
+                    let cur_oct = window.get_current_octave();
+                    let new_oct = (cur_oct + delta as i32).clamp(0, 8);
+                    if new_oct != cur_oct {
+                        log::info!("[Core 0] Encoder delta {} -> Octave {}", delta, new_oct);
+                        window.set_current_octave(new_oct);
+                        let _ = config_tx
+                            .lock()
+                            .unwrap()
+                            .enqueue(ConfigMessage::SetBaseOctave(new_oct));
+                        window.window().request_redraw();
+                    }
+                }
+                concurrency::UiInputEvent::ToggleView => {
+                    let new_view = !window.get_is_master_view();
+                    log::info!("[Core 0] Toggle View -> is_master = {}", new_view);
+                    window.set_is_master_view(new_view);
+                    window.window().request_redraw();
+                }
+                concurrency::UiInputEvent::OctaveUp => {
+                    let cur_oct = window.get_current_octave();
+                    if cur_oct < 8 {
+                        let new_oct = cur_oct + 1;
+                        log::info!("[Core 0] Octave Up -> {}", new_oct);
+                        window.set_current_octave(new_oct);
+                        let _ = config_tx
+                            .lock()
+                            .unwrap()
+                            .enqueue(ConfigMessage::SetBaseOctave(new_oct));
+                        window.window().request_redraw();
+                    }
+                }
+                concurrency::UiInputEvent::OctaveDown => {
+                    let cur_oct = window.get_current_octave();
+                    if cur_oct > 0 {
+                        let new_oct = cur_oct - 1;
+                        log::info!("[Core 0] Octave Down -> {}", new_oct);
+                        window.set_current_octave(new_oct);
+                        let _ = config_tx
+                            .lock()
+                            .unwrap()
+                            .enqueue(ConfigMessage::SetBaseOctave(new_oct));
+                        window.window().request_redraw();
+                    }
+                }
+                concurrency::UiInputEvent::MuteToggled(_) => {
+                    window.window().request_redraw();
+                }
+                concurrency::UiInputEvent::HardwareStatus(connected) => {
+                    log::info!(
+                        "[Core 0] Hardware status received: connected = {}",
+                        connected
+                    );
+                    window.set_hardware_connected(connected);
+                    window.window().request_redraw();
+                }
+            }
+        }
+
+        // 2. View switch detection
         let is_master = window.get_is_master_view();
         if is_master != prev_is_master {
-            log::info!("[Loop] View switched: {} -> {}, forcing 2 redraw frames", prev_is_master, is_master);
+            log::info!(
+                "[Core 0 UI] View switched: {} -> {}, forcing 2 redraw frames",
+                prev_is_master,
+                is_master
+            );
             prev_is_master = is_master;
             force_redraw_frames = 2;
         }
@@ -1116,6 +1310,7 @@ async fn run_single_screen_loop<'a>(
             force_redraw_frames -= 1;
         }
 
+        // 3. Read wait-free snapshot from Core 1
         let current_snap = snapshot.read();
 
         if !is_master {
@@ -1130,10 +1325,12 @@ async fn run_single_screen_loop<'a>(
             window.window().request_redraw();
         }
 
+        // 4. Update Slint animations and timers
         if platform::has_active_window() {
             slint::platform::update_timers_and_animations();
         }
 
+        // 5. Render & flush to LCD (with Strobe Gauge overlay in Tuner view)
         let t_render_start = unsafe { esp_idf_sys::esp_timer_get_time() };
         let rendered = if is_master {
             platform::flush_to_lcd()
@@ -1148,7 +1345,11 @@ async fn run_single_screen_loop<'a>(
         };
         let t_render_dur = unsafe { esp_idf_sys::esp_timer_get_time() } - t_render_start;
         if rendered && t_render_dur > 20_000 {
-            log::info!("[Perf] Render (is_master={}) took {} ms", is_master, t_render_dur / 1000);
+            log::info!(
+                "[Perf] Render (is_master={}) took {} ms",
+                is_master,
+                t_render_dur / 1000
+            );
         }
 
         if !rendered {
@@ -1156,8 +1357,6 @@ async fn run_single_screen_loop<'a>(
         } else {
             FreeRtos::delay_ms(1);
         }
-
-        step = step.wrapping_add(1);
     }
 }
 
@@ -1166,7 +1365,9 @@ async fn run_slave_telemetry_loop(
     window: &MainWindow,
     bus: Option<&I2cBus>,
     gt911: Option<&touch::Gt911Driver>,
-    uart_driver: Option<esp_idf_hal::uart::AsyncUartDriver<'static, esp_idf_hal::uart::UartDriver<'static>>>,
+    uart_driver: Option<
+        esp_idf_hal::uart::AsyncUartDriver<'static, esp_idf_hal::uart::UartDriver<'static>>,
+    >,
     mut _config_rx: heapless::spsc::Consumer<'static, ConfigMessage>,
 ) {
     #[derive(Default, Clone, Copy)]
@@ -1216,10 +1417,16 @@ async fn run_slave_telemetry_loop(
 
                     if idx > 0 {
                         if let Ok(len) = cobs::decode(&cobs_buf[..idx], &mut decode_buf) {
-                            if let Ok(MasterMessage::Telemetry(tuner_state)) = postcard::from_bytes::<MasterMessage>(&decode_buf[..len]) {
-                                let mut state = telemetry_clone.lock().unwrap_or_else(|e| e.into_inner());
+                            if let Ok(MasterMessage::Telemetry(tuner_state)) =
+                                postcard::from_bytes::<MasterMessage>(&decode_buf[..len])
+                            {
+                                let mut state =
+                                    telemetry_clone.lock().unwrap_or_else(|e| e.into_inner());
                                 match tuner_state {
-                                    TunerState::On { midi_note, pitch_bend_cents } => {
+                                    TunerState::On {
+                                        midi_note,
+                                        pitch_bend_cents,
+                                    } => {
                                         state.is_active = true;
                                         state.midi_note = midi_note;
                                         state.cents = pitch_bend_cents as f32;
@@ -1238,7 +1445,9 @@ async fn run_slave_telemetry_loop(
         });
     }
 
-    const NOTE_NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const NOTE_NAMES: [&str; 12] = [
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+    ];
     let mut last_touch: Option<(u16, u16)> = None;
 
     loop {
@@ -1246,33 +1455,42 @@ async fn run_slave_telemetry_loop(
         if let (Some(gt), Some(bus_ref)) = (gt911, bus) {
             if let Ok(mut driver) = bus_ref.try_borrow_mut() {
                 match gt.poll_touch(&mut driver) {
-                    touch::TouchEvent::Pressed { x, y } => {
-                        match last_touch {
-                            None => {
-                                log::info!("[Touch] PointerPressed at ({}, {})", x, y);
-                                platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerPressed {
+                    touch::TouchEvent::Pressed { x, y } => match last_touch {
+                        None => {
+                            log::info!("[Touch] PointerPressed at ({}, {})", x, y);
+                            platform::dispatch_pointer_event(
+                                slint::platform::WindowEvent::PointerPressed {
                                     position: slint::LogicalPosition::new(x as f32, y as f32),
                                     button: slint::platform::PointerEventButton::Left,
-                                });
+                                },
+                            );
+                            last_touch = Some((x, y));
+                        }
+                        Some((prev_x, prev_y)) => {
+                            if (x as i32 - prev_x as i32).abs() > 1
+                                || (y as i32 - prev_y as i32).abs() > 1
+                            {
+                                platform::dispatch_pointer_event(
+                                    slint::platform::WindowEvent::PointerMoved {
+                                        position: slint::LogicalPosition::new(x as f32, y as f32),
+                                    },
+                                );
                                 last_touch = Some((x, y));
                             }
-                            Some((prev_x, prev_y)) => {
-                                if (x as i32 - prev_x as i32).abs() > 1 || (y as i32 - prev_y as i32).abs() > 1 {
-                                    platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerMoved {
-                                        position: slint::LogicalPosition::new(x as f32, y as f32),
-                                    });
-                                    last_touch = Some((x, y));
-                                }
-                            }
                         }
-                    }
+                    },
                     touch::TouchEvent::Released => {
                         if let Some((prev_x, prev_y)) = last_touch {
                             log::info!("[Touch] PointerReleased at ({}, {})", prev_x, prev_y);
-                            platform::dispatch_pointer_event(slint::platform::WindowEvent::PointerReleased {
-                                position: slint::LogicalPosition::new(prev_x as f32, prev_y as f32),
-                                button: slint::platform::PointerEventButton::Left,
-                            });
+                            platform::dispatch_pointer_event(
+                                slint::platform::WindowEvent::PointerReleased {
+                                    position: slint::LogicalPosition::new(
+                                        prev_x as f32,
+                                        prev_y as f32,
+                                    ),
+                                    button: slint::platform::PointerEventButton::Left,
+                                },
+                            );
                             last_touch = None;
                         }
                     }
@@ -1285,7 +1503,14 @@ async fn run_slave_telemetry_loop(
             let mut state = telemetry_state.lock().unwrap_or_else(|e| e.into_inner());
             let u = state.updated;
             state.updated = false;
-            (state.cents, state.is_active, state.midi_note, state.volume, state.expression, u)
+            (
+                state.cents,
+                state.is_active,
+                state.midi_note,
+                state.volume,
+                state.expression,
+                u,
+            )
         };
 
         if updated {
@@ -1315,7 +1540,11 @@ async fn run_slave_telemetry_loop(
 
         let is_master = window.get_is_master_view();
         if is_master != prev_is_master {
-            log::info!("[Telemetry Loop] View switched: {} -> {}, forcing 2 redraw frames", prev_is_master, is_master);
+            log::info!(
+                "[Telemetry Loop] View switched: {} -> {}, forcing 2 redraw frames",
+                prev_is_master,
+                is_master
+            );
             prev_is_master = is_master;
             force_redraw_frames = 2;
         }
@@ -1328,10 +1557,7 @@ async fn run_slave_telemetry_loop(
         let rendered = if is_master {
             platform::flush_to_lcd()
         } else {
-            let gauge_params = gauge_renderer::StrobeGaugeParams {
-                cents,
-                is_active,
-            };
+            let gauge_params = gauge_renderer::StrobeGaugeParams { cents, is_active };
             platform::flush_to_lcd_with_overlay(|buf, stride, h| {
                 gauge_renderer::draw_strobe_gauge(buf, stride, h, &gauge_params);
             })
@@ -1432,7 +1658,9 @@ async fn run_master_3_threads() -> Result<(), FirmwareError> {
     });
 
     // Reset thread spawn configuration to defaults
-    esp_idf_hal::task::thread::ThreadSpawnConfiguration::default().set().ok();
+    esp_idf_hal::task::thread::ThreadSpawnConfiguration::default()
+        .set()
+        .ok();
 
     log::info!("Sensor and comms threads started. Running UI on main task...");
 
