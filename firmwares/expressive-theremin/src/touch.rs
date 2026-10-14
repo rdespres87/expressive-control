@@ -24,8 +24,12 @@ pub fn scan_i2c_bus(i2c: &mut I2cDriver) -> Vec<u8> {
         if i2c.read(addr, &mut buf, 15).is_ok() {
             let desc = match addr {
                 0x18 => " (PCA9557 I/O Expander)",
+                0x20 => " (MCP23017 Front-Panel & ToF Reset Expander)",
                 0x5D | 0x14 => " (GT911 Touch Controller)",
-                0x29 | 0x2A => " (VL53L4CD ToF Sensor)",
+                0x29 | 0x2A => " (VL53L4CD Boot ToF Sensor)",
+                0x30 => " (VL53L4CD Left/Volume ToF Sensor)",
+                0x31 => " (VL53L4CD Right/Pitch ToF Sensor)",
+                0x40 => " (RP2040-Zero USB-MIDI Target)",
                 _ => "",
             };
             log::info!("  -> Device found at 0x{:02X}{}", addr, desc);

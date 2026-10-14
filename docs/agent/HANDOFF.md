@@ -27,6 +27,6 @@ Completed I2C bus operating frequency investigation, slave device compatibility 
 - All unit tests verified (pin mapping, debouncer glitch rejection, full CW/CCW encoder cycles, bounce rejection).
 
 ## Next Logical Action
-1. Stage and commit the generic MCP23017 driver implementation and architecture documentation.
-2. Scaffold the RP2040-Zero firmware (I2C Target @ `0x40` $\rightarrow$ USB-MIDI Class-Compliant).
+1. Implement the RP2040-Zero firmware (I2C Target @ `0x40` $\rightarrow$ USB-MIDI Class-Compliant endpoint).
+2. Wire real-time distance and front-panel polling loops on ESP32 Core 1.
 

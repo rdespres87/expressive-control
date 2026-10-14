@@ -23,9 +23,13 @@ slint::include_modules!();
 #[allow(dead_code)]
 type ThereminUi = MainWindow;
 
+pub mod button;
 pub mod concurrency;
-pub mod i18n;
+pub mod encoder;
+pub mod front_panel;
 pub mod gauge_renderer;
+pub mod i18n;
+pub mod mcp23017;
 pub mod platform;
 pub mod protocol;
 pub mod touch;
@@ -646,6 +650,18 @@ async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
                 }
                 // Post-reset I2C scan (GT911 should now be responsive at 0x5D)
                 touch::scan_i2c_bus(&mut driver);
+
+                // Initialize Theremin Front Panel (assembling generic MCP23017, buttons, encoder & ToF reset)
+                let mut front_panel = front_panel::ThereminFrontPanel::new(mcp23017::MCP23017_DEFAULT_ADDR);
+                if let Err(e) = front_panel.init(&mut driver) {
+                    log::info!("[Slave] MCP23017 front panel not detected at 0x20 (normal if shield unattached): {:?}", e);
+                } else {
+                    log::info!("[Slave] MCP23017 front panel successfully detected and initialized at 0x20");
+                    if let Err(e) = front_panel.tof_controller.release_left(&mut front_panel.expander, &mut driver) {
+                        log::warn!("[Slave] Left ToF release failed: {:?}", e);
+                    }
+                }
+
                 // Initialize GT911 driver
                 gt911_opt = touch::Gt911Driver::init(&mut driver).ok();
                 i2c_opt = Some(driver);
