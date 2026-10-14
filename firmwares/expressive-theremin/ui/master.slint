@@ -13,6 +13,7 @@ export component MasterView inherits Rectangle {
     in-out property <string> filter_speed: "Fast";
     in-out property <string> midi_mode: "Standard";
     in-out property <int> pb_range: 2; // 2, 12, 24, 48
+    in-out property <string> app_version: "v0.1.0";
     in property <UiI18n> i18n;
     callback language_toggled();
 
@@ -330,29 +331,29 @@ export component MasterView inherits Rectangle {
             }
         }
 
-        // ROW 3: Theremin Specific (Quantization & Filter)
+        // ROW 3: Theremin Specific (Quantization & Filter & Info)
         HorizontalLayout {
             spacing: 12px;
             height: 136px;
 
-            // Pitch Quantization (Correction)
+            // Pitch Quantization (Correction) - Compacted to 364px
             Rectangle {
                 background: panel_bg;
                 border-radius: 14px;
-                width: 440px;
+                width: 364px;
                 VerticalLayout {
-                    padding: 8px; padding-left: 12px; padding-right: 12px; spacing: 6px; alignment: center;
+                    padding: 8px; padding-left: 8px; padding-right: 8px; spacing: 6px; alignment: center;
                     Text { text: root.i18n.pitch_correction; color: dim_text; font-size: 17px; font-weight: 700; horizontal-alignment: center; }
                     HorizontalLayout {
-                        spacing: 6px; alignment: center;
+                        spacing: 5px; alignment: center;
                         for val in [0, 25, 50, 75, 100]: TouchArea {
                             height: 48px;
                             Rectangle {
                                 border-radius: 10px;
                                 background: root.pitch_quantization == val ? accent : (parent.pressed ? #444458 : #333340);
                                 HorizontalLayout {
-                                    padding-left: 8px; padding-right: 8px; alignment: center;
-                                    Text { text: val + "%"; color: root.pitch_quantization == val ? #000000 : text_color; font-size: 20px; font-weight: 800; horizontal-alignment: center; vertical-alignment: center; }
+                                    padding-left: 6px; padding-right: 6px; alignment: center;
+                                    Text { text: val + "%"; color: root.pitch_quantization == val ? #000000 : text_color; font-size: 18px; font-weight: 800; horizontal-alignment: center; vertical-alignment: center; }
                                 }
                             }
                             clicked => { 
@@ -364,11 +365,11 @@ export component MasterView inherits Rectangle {
                 }
             }
 
-            // Filter Speed (254px)
+            // Filter Speed (232px)
             Rectangle {
                 background: panel_bg;
                 border-radius: 14px;
-                width: 254px;
+                width: 232px;
                 VerticalLayout {
                     padding: 8px; padding-left: 8px; padding-right: 8px; spacing: 6px; alignment: center;
                     Text {
@@ -392,11 +393,11 @@ export component MasterView inherits Rectangle {
                                 border-radius: 10px;
                                 background: root.filter_speed == item.id ? accent : (parent.pressed ? #444458 : #333340);
                                 HorizontalLayout {
-                                    padding-left: 8px; padding-right: 8px; alignment: center;
+                                    padding-left: 6px; padding-right: 6px; alignment: center;
                                     Text {
                                         text: item.label;
                                         color: root.filter_speed == item.id ? #000000 : text_color;
-                                        font-size: 18px;
+                                        font-size: 17px;
                                         font-weight: 800;
                                         horizontal-alignment: center;
                                         vertical-alignment: center;
@@ -412,11 +413,11 @@ export component MasterView inherits Rectangle {
                 }
             }
 
-            // Language Switcher in Bottom-Right (50px, perfectly aligned with right margin)
+            // Language Switcher in Bottom-Right (52px)
             Rectangle {
                 background: lang_touch.pressed ? #333348 : panel_bg;
                 border-radius: 14px;
-                width: 50px;
+                width: 52px;
                 border-width: 2px;
                 border-color: #444458;
 
@@ -454,6 +455,35 @@ export component MasterView inherits Rectangle {
                     }
                 }
             }
+
+            // Version Badge in Bottom-Right (84px)
+            Rectangle {
+                background: panel_bg;
+                border-radius: 14px;
+                width: 84px;
+                border-width: 2px;
+                border-color: #333348;
+
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 6px;
+
+                    Text {
+                        text: "VERSION";
+                        color: dim_text;
+                        font-size: 13px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: root.app_version;
+                        color: accent;
+                        font-size: 17px;
+                        font-weight: 900;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
         }
 
         // Force Slint software renderer embed_glyphs pass to pre-render French accented glyphs directly in MasterView
@@ -483,6 +513,7 @@ export component MasterWindow inherits Window {
     in-out property <string> filter_speed <=> view.filter_speed;
     in-out property <string> midi_mode <=> view.midi_mode;
     in-out property <int> pb_range <=> view.pb_range;
+    in-out property <string> app_version <=> view.app_version;
     in property <UiI18n> i18n <=> view.i18n;
     callback language_toggled <=> view.language_toggled;
 

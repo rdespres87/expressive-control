@@ -625,6 +625,7 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
     window.set_transpose("+0".into());
     window.set_is_master_view(true);
     window.set_hardware_connected(false); // Updated asynchronously by Core 1 once probed
+    window.set_app_version(concat!("v", env!("CARGO_PKG_VERSION")).into());
 
     // Initial i18n (French by default)
     let current_language = Arc::new(Mutex::new(i18n::Language::French));
@@ -635,7 +636,9 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
     let lang_state = Arc::clone(&current_language);
     let win_lang = window.as_weak();
     window.on_language_toggled(move || {
-        let mut lang = lang_state.lock().unwrap();
+        let mut lang = lang_state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         *lang = match *lang {
             i18n::Language::French => i18n::Language::English,
             i18n::Language::English => i18n::Language::French,
