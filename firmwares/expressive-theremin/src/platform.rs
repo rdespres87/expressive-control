@@ -99,15 +99,26 @@ const VSYNC_FRONT_PORCH: u32 = 8;
 
 // ─── VSYNC Hardware Callback ────────────────────────────────────────────────
 
-static VSYNC: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+static G_UI_TASK: core::sync::atomic::AtomicPtr<core::ffi::c_void> =
+    core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
 
 unsafe extern "C" fn vsync_callback(
     _panel: esp_lcd_panel_handle_t,
     _edata: *const esp_lcd_rgb_panel_event_data_t,
     _user_ctx: *mut c_void,
 ) -> bool {
-    VSYNC.store(true, core::sync::atomic::Ordering::SeqCst);
-    false
+    let task = G_UI_TASK.load(core::sync::atomic::Ordering::Acquire);
+    if !task.is_null() {
+        let mut higher_priority_task_woken = 0;
+        esp_idf_sys::vTaskGenericNotifyGiveFromISR(
+            task as esp_idf_sys::TaskHandle_t,
+            0,
+            &mut higher_priority_task_woken,
+        );
+        higher_priority_task_woken != 0
+    } else {
+        false
+    }
 }
 
 // ─── LCD Driver ─────────────────────────────────────────────────────────────
@@ -260,8 +271,12 @@ impl LcdDriver {
         // 1. Render into the inactive back buffer
         render_fn(current_buf);
 
-        // 2. Clear VSYNC flag BEFORE submitting the frame so we wait for the NEW VSYNC
-        VSYNC.store(false, core::sync::atomic::Ordering::SeqCst);
+        // 2. Clear any stale notifications BEFORE registering task handle
+        unsafe {
+            esp_idf_sys::ulTaskGenericNotifyTake(0, 1, 0); // non-blocking clear
+        }
+        let current_task = unsafe { esp_idf_sys::xTaskGetCurrentTaskHandle() };
+        G_UI_TASK.store(current_task as *mut c_void, core::sync::atomic::Ordering::Release);
 
         // 3. Queue the completed buffer to the LCD DMA controller for next refresh
         unsafe {
@@ -278,13 +293,13 @@ impl LcdDriver {
             }
         }
 
-        // 4. Wait for the hardware VSYNC event that occurs AFTER draw_bitmap was registered
-        let mut timeout_us: u32 = 50_000;
-        while !VSYNC.swap(false, core::sync::atomic::Ordering::SeqCst) && timeout_us > 0 {
-            esp_idf_hal::task::do_yield();
-            esp_idf_hal::delay::Ets::delay_us(100);
-            timeout_us = timeout_us.saturating_sub(100);
+        // 4. Sleep at 0% CPU until hardware VSYNC ISR wakes this task (50ms timeout)
+        let notified = unsafe { esp_idf_sys::ulTaskGenericNotifyTake(0, 1, 50) };
+        if notified == 0 {
+            log::warn!("VSYNC wait timeout (50ms)");
         }
+
+        G_UI_TASK.store(core::ptr::null_mut(), core::sync::atomic::Ordering::Release);
 
         // 5. Alternate buffer for next frame: now safe because DMA has switched to current_buf
         self.use_buf1 = !self.use_buf1;

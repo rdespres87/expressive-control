@@ -231,40 +231,53 @@ fn draw_aa_segment(buf: &mut [Rgb565Pixel], stride: usize, segment: LineSegment)
         return;
     }
     let half_w = segment.thickness * 0.5;
-    let radius = half_w + 1.0;
+    let max_r = half_w + 0.5;
+    let max_r_sq = max_r * max_r;
+    let min_r = (half_w - 0.5).max(0.0);
+    let min_r_sq = min_r * min_r;
 
     // Bounding box of the segment with antialiasing padding
-    let min_x = ((segment.start.x.min(segment.end.x) - radius).floor() as i32).max(0);
+    let min_x = ((segment.start.x.min(segment.end.x) - max_r).floor() as i32).max(0);
     let max_x =
-        ((segment.start.x.max(segment.end.x) + radius).ceil() as i32).min((stride - 1) as i32);
-    let min_y = ((segment.start.y.min(segment.end.y) - radius).floor() as i32).max(0);
-    let max_y = ((segment.start.y.max(segment.end.y) + radius).ceil() as i32).min(479);
+        ((segment.start.x.max(segment.end.x) + max_r).ceil() as i32).min((stride - 1) as i32);
+    let min_y = ((segment.start.y.min(segment.end.y) - max_r).floor() as i32).max(0);
+    let max_y = ((segment.start.y.max(segment.end.y) + max_r).ceil() as i32).min(479);
 
     let inv_len_sq = 1.0 / len_sq;
 
     for py in min_y..=max_y {
         let fpy = py as f32 + 0.5;
+        let p_dy = fpy - segment.start.y;
         for px in min_x..=max_x {
             let fpx = px as f32 + 0.5;
+            let p_dx = fpx - segment.start.x;
 
             // Project point onto segment: t in [0.0, 1.0]
-            let t = (((fpx - segment.start.x) * dx + (fpy - segment.start.y) * dy) * inv_len_sq)
-                .clamp(0.0, 1.0);
+            let t = ((p_dx * dx + p_dy * dy) * inv_len_sq).clamp(0.0, 1.0);
             let proj_x = segment.start.x + t * dx;
             let proj_y = segment.start.y + t * dy;
 
             // Distance from pixel center to closest point on segment
-            let dist_sq = (fpx - proj_x) * (fpx - proj_x) + (fpy - proj_y) * (fpy - proj_y);
-            let dist = dist_sq.sqrt();
+            let d_x = fpx - proj_x;
+            let d_y = fpy - proj_y;
+            let dist_sq = d_x * d_x + d_y * d_y;
 
-            // Subpixel coverage calculation
-            let edge = dist - half_w;
-            let alpha = if edge <= -0.5 {
+            if dist_sq > max_r_sq {
+                continue;
+            }
+
+            let alpha = if dist_sq <= min_r_sq {
                 1.0
-            } else if edge < 0.5 {
-                0.5 - edge
             } else {
-                0.0
+                let dist = dist_sq.sqrt();
+                let edge = dist - half_w;
+                if edge <= -0.5 {
+                    1.0
+                } else if edge < 0.5 {
+                    0.5 - edge
+                } else {
+                    0.0
+                }
             };
 
             if alpha > 0.01 {
@@ -276,27 +289,41 @@ fn draw_aa_segment(buf: &mut [Rgb565Pixel], stride: usize, segment: LineSegment)
 
 /// Draw a filled subpixel antialiased circle.
 fn draw_aa_circle(buf: &mut [Rgb565Pixel], stride: usize, circle: FilledCircle) {
-    let r_max = circle.radius + 1.0;
-    let min_x = ((circle.center.x - r_max).floor() as i32).max(0);
-    let max_x = ((circle.center.x + r_max).ceil() as i32).min((stride - 1) as i32);
-    let min_y = ((circle.center.y - r_max).floor() as i32).max(0);
-    let max_y = ((circle.center.y + r_max).ceil() as i32).min(479);
+    let max_r = circle.radius + 0.5;
+    let max_r_sq = max_r * max_r;
+    let min_r = (circle.radius - 0.5).max(0.0);
+    let min_r_sq = min_r * min_r;
+
+    let min_x = ((circle.center.x - max_r).floor() as i32).max(0);
+    let max_x = ((circle.center.x + max_r).ceil() as i32).min((stride - 1) as i32);
+    let min_y = ((circle.center.y - max_r).floor() as i32).max(0);
+    let max_y = ((circle.center.y + max_r).ceil() as i32).min(479);
 
     for py in min_y..=max_y {
         let fpy = py as f32 + 0.5;
         let dy = fpy - circle.center.y;
+        let dy_sq = dy * dy;
         for px in min_x..=max_x {
             let fpx = px as f32 + 0.5;
             let dx = fpx - circle.center.x;
-            let dist = (dx * dx + dy * dy).sqrt();
+            let dist_sq = dx * dx + dy_sq;
 
-            let edge = dist - circle.radius;
-            let alpha = if edge <= -0.5 {
+            if dist_sq > max_r_sq {
+                continue;
+            }
+
+            let alpha = if dist_sq <= min_r_sq {
                 1.0
-            } else if edge < 0.5 {
-                0.5 - edge
             } else {
-                0.0
+                let dist = dist_sq.sqrt();
+                let edge = dist - circle.radius;
+                if edge <= -0.5 {
+                    1.0
+                } else if edge < 0.5 {
+                    0.5 - edge
+                } else {
+                    0.0
+                }
             };
 
             if alpha > 0.01 {
@@ -309,8 +336,15 @@ fn draw_aa_circle(buf: &mut [Rgb565Pixel], stride: usize, circle: FilledCircle) 
 /// Draw a subpixel antialiased circular arc track.
 fn draw_aa_arc(buf: &mut [Rgb565Pixel], stride: usize, arc: CircularArc) {
     let half_w = arc.thickness * 0.5;
-    let r_min = arc.radius - half_w - 1.0;
-    let r_max = arc.radius + half_w + 1.0;
+    let r_min = arc.radius - half_w - 0.5;
+    let r_max = arc.radius + half_w + 0.5;
+    let r_min_sq = (r_min.max(0.0)) * (r_min.max(0.0));
+    let r_max_sq = r_max * r_max;
+
+    let r_inner_full = (arc.radius - half_w + 0.5).max(0.0);
+    let r_inner_full_sq = r_inner_full * r_inner_full;
+    let r_outer_full = arc.radius + half_w - 0.5;
+    let r_outer_full_sq = r_outer_full * r_outer_full;
 
     let min_x = ((arc.center.x - r_max).floor() as i32).max(0);
     let max_x = ((arc.center.x + r_max).ceil() as i32).min((stride - 1) as i32);
@@ -320,29 +354,80 @@ fn draw_aa_arc(buf: &mut [Rgb565Pixel], stride: usize, arc: CircularArc) {
     for py in min_y..=max_y {
         let fpy = py as f32 + 0.5;
         let dy = fpy - arc.center.y;
+        let dy_sq = dy * dy;
         for px in min_x..=max_x {
             let fpx = px as f32 + 0.5;
             let dx = fpx - arc.center.x;
-            let dist = (dx * dx + dy * dy).sqrt();
+            let dist_sq = dx * dx + dy_sq;
 
-            if dist >= r_min && dist <= r_max {
-                let d = (dist - arc.radius).abs();
-                let edge = d - half_w;
-                let alpha = if edge <= -0.5 {
+            if dist_sq < r_min_sq || dist_sq > r_max_sq {
+                continue;
+            }
+
+            let alpha = if dist_sq >= r_inner_full_sq && dist_sq <= r_outer_full_sq {
+                1.0
+            } else {
+                let dist = dist_sq.sqrt();
+                let edge = (dist - arc.radius).abs() - half_w;
+                if edge <= -0.5 {
                     1.0
                 } else if edge < 0.5 {
                     0.5 - edge
                 } else {
                     0.0
-                };
-
-                if alpha > 0.01 {
-                    blend_pixel_alpha(buf, stride, px, py, arc.color, alpha);
                 }
+            };
+
+            if alpha > 0.01 {
+                blend_pixel_alpha(buf, stride, px, py, arc.color, alpha);
             }
         }
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+struct PrecomputedTick {
+    start: Point2D,
+    end: Point2D,
+    thickness: f32,
+    kind: TickKind,
+    cents: f32,
+}
+
+static PRECOMPUTED_TICKS: std::sync::LazyLock<[PrecomputedTick; 101]> =
+    std::sync::LazyLock::new(|| {
+        let center = Point2D::new(400.0, 265.0);
+        let pi = core::f32::consts::PI;
+        let mut ticks = [PrecomputedTick {
+            start: Point2D::new(0.0, 0.0),
+            end: Point2D::new(0.0, 0.0),
+            thickness: 0.0,
+            kind: TickKind::Minor,
+            cents: 0.0,
+        }; 101];
+
+        for (i, tick) in ticks.iter_mut().enumerate() {
+            let tick_cents = -50.0 + (i as f32) * 1.0;
+            let a = -pi / 2.0 + (i as f32 / 100.0) * pi;
+            let sin_a = a.sin();
+            let cos_a = a.cos();
+
+            let kind = TickKind::from_index(i);
+            let (r_in, r_out, thickness) = kind.dimensions();
+
+            let start = Point2D::new(center.x + r_in * sin_a, center.y - r_in * cos_a);
+            let end = Point2D::new(center.x + r_out * sin_a, center.y - r_out * cos_a);
+
+            *tick = PrecomputedTick {
+                start,
+                end,
+                thickness,
+                kind,
+                cents: tick_cents,
+            };
+        }
+        ticks
+    });
 
 /// Draw the Strobe Tuner Gauge with pristine subpixel antialiasing.
 pub fn draw_strobe_gauge(
@@ -355,18 +440,13 @@ pub fn draw_strobe_gauge(
     let r_track: f32 = 232.0;
     let pi = core::f32::consts::PI;
 
-    // 0. Clear gauge area with background color (#0c0b0f) to prevent ghosting between double buffers.
-    // At y < 85, the circular gauge is centered around x=400 and does not exceed x=550.
-    // Restricting x_end to 560 for y < 85 guarantees the top-right Config button (x: 610..780, y: 15..71)
-    // is never clipped or overwritten by the gauge renderer.
+    // 0. Clear gauge area with background color (#0c0b0f) using fast bulk fills.
     let bg_pixel = Rgb565Pixel(0x0841);
     for y in 14..=278 {
         let row_start = y * stride;
         let x_start = if y < 85 { 240 } else { 140 };
         let x_end = if y < 85 { 560 } else { 650 };
-        for x in x_start..=x_end {
-            buf[row_start + x] = bg_pixel;
-        }
+        buf[row_start + x_start..=row_start + x_end].fill(bg_pixel);
     }
 
     // Palette
@@ -386,32 +466,25 @@ pub fn draw_strobe_gauge(
         CircularArc::new(center, r_track, 20.0, col_track),
     );
 
-    // 2. 101 Radial Strobe Notches (Heavily thickened for high impact)
-    for i in 0..=100 {
-        let tick_cents = -50.0 + (i as f32) * 1.0;
-        let a = -pi / 2.0 + (i as f32 / 100.0) * pi;
-
-        let sin_a = a.sin();
-        let cos_a = a.cos();
-
-        let kind = TickKind::from_index(i);
-        let (r_in, r_out, thickness) = kind.dimensions();
-
-        let start = Point2D::new(center.x + r_in * sin_a, center.y - r_in * cos_a);
-        let end = Point2D::new(center.x + r_out * sin_a, center.y - r_out * cos_a);
-
+    // 2. 101 Precomputed Radial Strobe Notches
+    for (i, tick) in PRECOMPUTED_TICKS.iter().enumerate() {
         let is_lit = params.is_active
-            && ((clamped_cents <= -0.5 && tick_cents >= clamped_cents && tick_cents <= 0.0)
-                || (clamped_cents >= 0.5 && tick_cents <= clamped_cents && tick_cents >= 0.0)
+            && ((clamped_cents <= -0.5 && tick.cents >= clamped_cents && tick.cents <= 0.0)
+                || (clamped_cents >= 0.5 && tick.cents <= clamped_cents && tick.cents >= 0.0)
                 || (abs_cents < 0.5 && i == 50));
 
         let color = if is_lit {
             tuning_status.color()
         } else {
-            kind.default_color(col_center_ref, col_tick_major, col_tick_idle)
+            tick.kind
+                .default_color(col_center_ref, col_tick_major, col_tick_idle)
         };
 
-        draw_aa_segment(buf, stride, LineSegment::new(start, end, thickness, color));
+        draw_aa_segment(
+            buf,
+            stride,
+            LineSegment::new(tick.start, tick.end, tick.thickness, color),
+        );
     }
 
     // 3. Pivoting Needle (Heavy instrument-style 10.0px needle with 18.0px diamond head)
@@ -513,5 +586,35 @@ mod tests {
         assert_eq!(circle.center, p);
         assert_eq!(circle.radius, 8.0);
         assert_eq!(circle.color, col);
+    }
+
+    #[test]
+    fn test_precomputed_ticks_geometry() {
+        assert_eq!(PRECOMPUTED_TICKS.len(), 101);
+
+        // Center tick (index 50) is perfectly vertical
+        let center_tick = &PRECOMPUTED_TICKS[50];
+        assert_eq!(center_tick.kind, TickKind::Center);
+        assert!((center_tick.start.x - 400.0).abs() < 0.01);
+        assert!((center_tick.end.x - 400.0).abs() < 0.01);
+        assert!(center_tick.end.y < center_tick.start.y);
+
+        // First tick (-50 cents) is on the left
+        let left_tick = &PRECOMPUTED_TICKS[0];
+        assert!(left_tick.start.x < 400.0);
+        assert!(left_tick.end.x < left_tick.start.x);
+
+        // Last tick (+50 cents) is on the right
+        let right_tick = &PRECOMPUTED_TICKS[100];
+        assert!(right_tick.start.x > 400.0);
+        assert!(right_tick.end.x > right_tick.start.x);
+
+        // Verify all ticks stay within the 800x480 canvas bounds
+        for tick in PRECOMPUTED_TICKS.iter() {
+            assert!(tick.start.x >= 0.0 && tick.start.x <= 800.0);
+            assert!(tick.start.y >= 0.0 && tick.start.y <= 480.0);
+            assert!(tick.end.x >= 0.0 && tick.end.x <= 800.0);
+            assert!(tick.end.y >= 0.0 && tick.end.y <= 480.0);
+        }
     }
 }

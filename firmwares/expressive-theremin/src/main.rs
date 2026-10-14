@@ -1246,6 +1246,14 @@ async fn run_core0_ui_render_loop(
     let mut force_redraw_frames: u8 = 0;
     let mut last_pointer_pos = slint::LogicalPosition::new(0.0, 0.0);
 
+    let mut prev_is_active = window.get_is_active();
+    let mut prev_note_name: &'static str = "";
+    let mut prev_octave: i8 = 99;
+    let mut prev_cents: f32 = 999.0;
+    let mut prev_volume: f32 = 999.0;
+    let mut prev_expression: f32 = 999.0;
+    let mut prev_freq_tenth: u32 = 999999;
+
     loop {
         // 1. Drain pending UI input events from Core 1
         while let Some(evt) = ui_input_rx.dequeue() {
@@ -1353,15 +1361,55 @@ async fn run_core0_ui_render_loop(
         let current_snap = snapshot.read();
 
         if !is_master {
-            window.set_is_active(current_snap.is_active);
-            window.set_note_name(current_snap.note_name.into());
-            window.set_octave(format!("{}", current_snap.octave).into());
-            window.set_cents(current_snap.cents);
-            window.set_volume(current_snap.volume);
-            window.set_expression(current_snap.expression);
-            window.set_frequency(format!("{:.1} Hz", current_snap.freq_hz).into());
+            let mut state_changed = false;
 
-            window.window().request_redraw();
+            if current_snap.is_active != prev_is_active {
+                window.set_is_active(current_snap.is_active);
+                prev_is_active = current_snap.is_active;
+                state_changed = true;
+            }
+            if current_snap.note_name != prev_note_name {
+                window.set_note_name(current_snap.note_name.into());
+                prev_note_name = current_snap.note_name;
+                state_changed = true;
+            }
+            if current_snap.octave != prev_octave {
+                let mut oct_buf = heapless::String::<8>::new();
+                let _ = core::fmt::write(&mut oct_buf, format_args!("{}", current_snap.octave));
+                window.set_octave(oct_buf.as_str().into());
+                prev_octave = current_snap.octave;
+                state_changed = true;
+            }
+            if (current_snap.cents - prev_cents).abs() >= 0.2 {
+                window.set_cents(current_snap.cents);
+                prev_cents = current_snap.cents;
+                state_changed = true;
+            }
+            if (current_snap.volume - prev_volume).abs() >= 0.01 {
+                window.set_volume(current_snap.volume);
+                prev_volume = current_snap.volume;
+                state_changed = true;
+            }
+            if (current_snap.expression - prev_expression).abs() >= 0.01 {
+                window.set_expression(current_snap.expression);
+                prev_expression = current_snap.expression;
+                state_changed = true;
+            }
+            let freq_tenth = (current_snap.freq_hz * 10.0) as u32;
+            if freq_tenth != prev_freq_tenth {
+                let mut freq_buf = heapless::String::<16>::new();
+                let _ = core::fmt::write(
+                    &mut freq_buf,
+                    format_args!("{:.1} Hz", current_snap.freq_hz),
+                );
+                window.set_frequency(freq_buf.as_str().into());
+                prev_freq_tenth = freq_tenth;
+                state_changed = true;
+            }
+
+            if state_changed || current_snap.is_active {
+                window.window().request_redraw();
+            }
         }
 
         // 4. Update Slint animations and timers
@@ -1394,7 +1442,7 @@ async fn run_core0_ui_render_loop(
         if !rendered {
             FreeRtos::delay_ms(2);
         } else {
-            FreeRtos::delay_ms(1);
+            esp_idf_hal::task::do_yield();
         }
     }
 }
