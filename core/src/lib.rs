@@ -1,6 +1,7 @@
 #![no_std]
 
 pub mod midi;
+pub use midi::{ToMidi, ToUsbMidi, UsbMidiPacket};
 
 pub mod processor;
 pub mod telemetry;

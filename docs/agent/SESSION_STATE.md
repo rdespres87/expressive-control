@@ -10,24 +10,15 @@ V0.6 ToF Theremin Prototype (ESP32-S3 + CrowPanel 5.0" Slint UI)
 Hardware-in-the-Loop validation of real-time dual-core performance and RP2040-Zero USB-MIDI coprocessor design.
 
 ## Last completed
-- Decoupled ESP32-S3 Dual-Core execution for real-time performance:
-  - **Core 1 (APP_CPU)**: Real-time 100 Hz (10ms) sensor polling & DSP loop (`core1_sensor_dsp_task`):
-    - Completely isolated from LCD VSYNC and DMA rendering.
-    - Probes I2C devices (GT911 touch at `0x5D`, MCP23017 expander at `0x20`, dual VL53L4CD ToF).
-    - Captures touch pointer events and front panel controls (octave +/-, mute, rotary encoder) and forwards them lock-free via `heapless::spsc::Queue<UiInputEvent, 32>`.
-    - Computes musical pitch/expression DSP via `TofThereminProcessor`.
-    - Publishes wait-free state updates to `AtomicTunerSnapshot` (SeqLock).
-  - **Core 0 (PRO_CPU)**: Pure 60 FPS Slint UI and LCD RGB DMA flush (`run_core0_ui_render_loop`):
-    - Completely decoupled from I2C bus transactions.
-    - Drains `ui_input_rx` to dispatch Slint pointer events and update UI controls.
-    - Reads latest musical snapshot wait-free for strobe gauge overlay and Slint properties.
-- Verified on hardware (ESP32-S3 CrowPanel 5.0" on `/dev/cu.usbserial-1420`):
-  - GT911 touch detected and confirmed at 0x5D (Product ID: '911').
-  - Live touch view toggles (Master <-> Tuner) and language toggles (FR <-> EN) confirmed over lock-free queue.
-  - Zero compiler warnings (`cargo clippy --release -- -D warnings`), code formatted (`cargo fmt`), all tests passing.
-- Fixed Tuner button vertical text alignment in `firmwares/expressive-theremin/ui/master.slint` (`c338bed`).
+- Implemented and verified Option 1: RP2040-Zero USB-MIDI Class-Compliant coprocessor firmware:
+  - Crate `firmwares/rp2040-usb-midi` (RP2040 Cortex-M0+, Embassy async, Embassy USB-MIDI, I2C target).
+  - I2C0 target on GPIO 4 (SDA) / GPIO 5 (SCL) at address `0x40`.
+  - Batching up to 15 packets (60 bytes < 64 byte endpoint limit) to guarantee short packet delivery without zero-length packet (ZLP) latency.
+  - Implemented `UsbMidiPacket` (Table 4-1 compliant) and `ToUsbMidi` trait in `core/src/midi.rs` (5 new unit tests, 12 total passing).
+  - Wired Core 1 sensor/DSP loop in `firmwares/expressive-theremin/src/main.rs` to stream 4-byte MIDI packets over I2C to address `0x40`.
+  - Completed Adversarial Post-Implementation Grill (Gate 3) in `rp2040_usb_midi_implementation_grill.md`. All clippy, compilation, and unit tests passing.
 
 ## Next action
-- Commit dual-core real-time optimization changes (Gate 3 approval).
-- Scaffold and implement RP2040-Zero USB-MIDI coprocessor firmware (I2C Target @ 0x40 -> USB-MIDI Class Compliant).
+- Commit RP2040-Zero USB-MIDI coprocessor implementation and ESP32-S3 streaming bridge.
+- Flash firmware onto Waveshare RP2040-Zero via SWD/picotool and validate USB enumeration on host DAW.
 

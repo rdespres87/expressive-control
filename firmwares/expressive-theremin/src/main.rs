@@ -61,6 +61,8 @@ const VL53L4CD_DEFAULT_ADDR: u8 = 0x29;
 const VOLUME_SENSOR_ADDR: u8 = 0x30;
 /// 7-bit I2C address assigned to the pitch sensor during the sequential boot.
 const PITCH_SENSOR_ADDR: u8 = 0x31;
+/// 7-bit I2C address of the RP2040-Zero USB-MIDI coprocessor.
+const RP2040_MIDI_I2C_ADDR: u8 = 0x40;
 /// Simulated distance value when no sensors are connected (cm).
 const SIMULATED_DISTANCE: u16 = 50;
 /// 16-bit index of the VL53L4CD `I2C_SLAVE__DEVICE_ADDRESS` register.
@@ -996,8 +998,7 @@ fn core1_sensor_dsp_task(
             front_panel_opt = Some(fp);
         }
 
-        hw_connected = gt911_opt.is_some()
-            || front_panel_opt.is_some()
+        hw_connected = front_panel_opt.is_some()
             || tof_vol_opt.is_some()
             || tof_pitch_opt.is_some();
     }
@@ -1127,27 +1128,54 @@ fn core1_sensor_dsp_task(
         impl expressive_core::telemetry::TelemetryHandler for NullTelemetry {
             fn handle(&mut self, _event: expressive_core::telemetry::TelemetryEvent) {}
         }
-        let _ = processor.process_event(
-            SensorEvent::Position3D {
-                id: 0,
-                x: 0,
-                y: 0,
-                z: pitch_z,
-            },
-            &mut events,
-            &mut NullTelemetry,
-        );
+        let n_pitch = processor
+            .process_event(
+                SensorEvent::Position3D {
+                    id: 0,
+                    x: 0,
+                    y: 0,
+                    z: pitch_z,
+                },
+                &mut events,
+                &mut NullTelemetry,
+            )
+            .unwrap_or(0);
+
+        if n_pitch > 0 {
+            if let Some(ref bus_ref) = i2c_bus {
+                if let Ok(mut driver) = bus_ref.try_borrow_mut() {
+                    for ev in &events[..n_pitch] {
+                        let packet = expressive_core::ToUsbMidi::to_usb_midi(ev, 0);
+                        let _ = driver.write(RP2040_MIDI_I2C_ADDR, packet.as_bytes(), 5);
+                    }
+                }
+            }
+        }
+
         let effective_vol_z = if is_muted { 1000 } else { vol_z };
-        let _ = processor.process_event(
-            SensorEvent::Position3D {
-                id: 1,
-                x: 0,
-                y: 0,
-                z: effective_vol_z,
-            },
-            &mut events,
-            &mut NullTelemetry,
-        );
+        let n_vol = processor
+            .process_event(
+                SensorEvent::Position3D {
+                    id: 1,
+                    x: 0,
+                    y: 0,
+                    z: effective_vol_z,
+                },
+                &mut events,
+                &mut NullTelemetry,
+            )
+            .unwrap_or(0);
+
+        if n_vol > 0 {
+            if let Some(ref bus_ref) = i2c_bus {
+                if let Ok(mut driver) = bus_ref.try_borrow_mut() {
+                    for ev in &events[..n_vol] {
+                        let packet = expressive_core::ToUsbMidi::to_usb_midi(ev, 0);
+                        let _ = driver.write(RP2040_MIDI_I2C_ADDR, packet.as_bytes(), 5);
+                    }
+                }
+            }
+        }
 
         let note_u8 = processor.base_note.as_u8();
         let bend_u16 = processor.current_pitch_bend();
