@@ -1,0 +1,7 @@
+[package]
+name = "elf2uf2"
+version = "0.1.0"
+edition = "2021"
+description = "Pure Rust zero-dependency ELF to UF2 converter for RP2040"
+
+[dependencies]
