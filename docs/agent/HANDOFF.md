@@ -1,37 +1,35 @@
 # Session Handoff
 
 ## Context
-Completed dual ST VL53L4CD Time-of-Flight (ToF) initialization, resilient hardware-absent fallback, and front panel button integration:
-- **Dual ToF Sequential Boot via MCP23017 (`GPA0`/`GPA1`)**:
-  - `DualTofResetController` releases Left ToF (`XSHUT` on `GPA0`), initializes it on default `0x29`, and re-addresses it to `0x30`.
-  - Releases Right ToF (`XSHUT` on `GPA1`), initializes it on default `0x29`, and re-addresses it to `0x31`.
-  - Starts continuous ranging at 50 Hz (`TIMING_BUDGET_MS = 20`) on both sensors without address collision.
-- **Resilient Hardware Detection & Zero-Panic Fallback**:
-  - When the shield or sensors are unattached or NACK, the firmware logs the absence, gracefully falls back to synthetic sinusoidal simulation, and sets `hardware_connected = false`.
-- **Slint UI Warning Status Banner**:
-  - Added dedicated status text centered at the bottom of `MainWindow`:
-    - French: `⚠ Périphériques non connectés (Mode Simulation)`
-    - English: `⚠ Peripherals disconnected (Simulation Mode)`
-  - Visible when `!hardware_connected`.
-- **Front Panel Physical Controls**:
-  - `GPA4`: Octave + button (increments base octave and syncs Slint UI & processor).
-  - `GPA5`: Octave - button (decrements base octave and syncs Slint UI & processor).
-  - `GPA6`: Mute button (toggles audio output mute).
-  - `GPB0`, `GPB1`, `GPB2`: Rotary encoder with push switch (rotate adjusts base octave, click toggles UI view between Master and Strobe Tuner).
+Completed dual-core real-time decoupling, sensor loop optimization, and hardened input pipeline:
+- **Core 1 (APP_CPU) — 100 Hz Real-Time Sensor & DSP Engine (`core1_sensor_dsp_task`)**:
+  - Isolated from LCD VSYNC and DMA rendering.
+  - Probes and drives I2C bus: GT911 touch screen (`0x5D`), MCP23017 expander (`0x20`), and dual VL53L4CD ToF sensors (`0x30` / `0x31`) with graceful synthetic fallback.
+  - Captures touch events and physical controls (`Octave +/-`, `Mute`, `RotaryEncoder`), forwarding them lock-free via `heapless::spsc::Queue<UiInputEvent, 32>`.
+  - Protected against drag saturation (`PointerMoved` enqueued only when `ready()`).
+  - Guaranteed `PointerReleased` delivery via bounded retry loop to prevent stuck touches.
+  - Corrected mute volume mapping to 1000 mm (silent boundary), triggering clean `NoteOff`.
+  - Publishes wait-free state updates to `AtomicTunerSnapshot` (SeqLock).
+- **Core 0 (PRO_CPU) — Pure 60 FPS Slint UI & DMA Renderer (`run_core0_ui_render_loop`)**:
+  - Drains `ui_input_rx` and dispatches Slint window events without touching I2C.
+  - Reads wait-free snapshot and renders Strobe Tuner needle & subpixel strobe gauge overlay.
+  - Forwards configuration messages to Core 1 via `heapless::spsc::Queue<ConfigMessage, 16>`.
+- **Adversarial Grill Review & Expanded Unit Test Suite**:
+  - Added 4 unit test suites in `instruments/theremin/src/lib.rs` (15 tests total across workspace):
+    - `test_mute_behavior_sends_note_off`
+    - `test_sensor_event_released_volume_and_pitch`
+    - `test_configuration_updates`
+    - `test_buffer_too_small_returns_error`
 
 ## Verification
-- `cargo fmt --all -- --check`: Clean (0 diffs).
-- `cargo clippy --workspace -- -D warnings`: Clean (0 warnings).
-- `cargo clippy --release -- -D warnings`: Clean (0 warnings, `single-screen` default).
-- `cargo clippy --tests -- -D warnings`: Clean (0 warnings).
-- All 41 workspace unit tests passing.
-- Cleaned all obsolete `#[allow(unused_...)]` and `#[allow(dead_code)]` attributes.
-- Refactored `gauge_renderer.rs` with domain structures (`Point2D`, `LineSegment`, `CircularArc`, `FilledCircle`) and enums (`TickKind`, `TuningStatus`), eliminating `#[allow(clippy::too_many_arguments)]` and fixing the dot rendering bug.
-- Established `single-screen` as default primary architecture for CrowPanel 5.0".
-- Live flashing on ESP32-S3 CrowPanel 5.0" via `/dev/cu.usbserial-1420`: Boot validated, absence detected cleanly, simulation running with zero flash backlight and red warning banner displayed.
+- `cargo fmt --check`: Clean (0 diffs).
+- `cargo clippy --release -- -D warnings`: Clean (0 warnings).
+- `cargo test -p expressive-core -p theremin`: 15 passed, 0 failed.
+- Physical Hardware Validation (CrowPanel 5.0" on `/dev/cu.usbserial-1420`):
+  - GT911 touch confirmed at `0x5D` (Product ID: '911').
+  - Live touch view toggles (Master <-> Tuner) and language toggles (FR <-> EN) confirmed in serial logs.
+- Committed as `843b6b9`.
 
 ## Next Logical Action
-1. Finalize git commit of the `single-screen` architecture changes (Security Gate 3).
-2. Implement the RP2040-Zero firmware (I2C Target @ `0x40` $\rightarrow$ USB-MIDI Class-Compliant endpoint).
-3. Wire real-time distance and front-panel polling loops on ESP32 Core 1.
-
+1. Implement the RP2040-Zero firmware (I2C Target @ `0x40` -> USB-MIDI Class-Compliant endpoint).
+2. Wire I2C transmission of 3-byte MIDI packets from ESP32-S3 Core 1 to RP2040-Zero.
