@@ -1,3 +1,4 @@
+import { UiI18n } from "i18n_types.slint";
 import { SlaveView, SlaveWindow } from "theremin.slint";
 import { MasterView, MasterWindow } from "master.slint";
 
@@ -28,6 +29,8 @@ export component MainWindow inherits Window {
     in-out property <string> filter_speed: "Fast";
     in-out property <string> midi_mode: "Standard";
     in-out property <int> pb_range: 2;
+    in-out property <UiI18n> i18n;
+    callback language_toggled();
 
     // Master Callbacks
     callback root_changed(string);
@@ -42,6 +45,20 @@ export component MainWindow inherits Window {
     // View switch callback
     callback view_switched(bool);
 
+    // Force Slint software renderer embed_glyphs pass to pre-render 'É' at the exact font sizes/weights
+    dummy_glyph_cache := Rectangle {
+        visible: false;
+        width: 0px;
+        height: 0px;
+        x: -1000px;
+        y: -1000px;
+
+        Text { text: "RÉPONSE RÉPONSES FILTRE DE RÉPONSE Réponse réponse Response"; font-size: 18px; font-weight: 800; }
+        Text { text: "RÉPONSE RÉPONSES FILTRE DE RÉPONSE Réponse réponse Response"; font-size: 17px; font-weight: 700; }
+        Text { text: "RÉGLAGES réglages Réglages Settings"; font-size: 19px; font-weight: 800; }
+        Text { text: "RÉGLAGES réglages Réglages Settings"; font-size: 18px; font-weight: 800; }
+    }
+
     slave_view := SlaveView {
         width: 100%;
         height: 100%;
@@ -55,6 +72,7 @@ export component MainWindow inherits Window {
         expression: root.expression;
         frequency: root.frequency;
         transpose: root.transpose;
+        i18n: root.i18n;
 
         switch_to_master => {
             root.is_master_view = true;
@@ -75,6 +93,8 @@ export component MainWindow inherits Window {
         filter_speed <=> root.filter_speed;
         midi_mode <=> root.midi_mode;
         pb_range <=> root.pb_range;
+        i18n: root.i18n;
+        language_toggled => { root.language_toggled(); }
 
         root_changed(val) => { root.root_changed(val); }
         scale_changed(val) => { root.scale_changed(val); }
@@ -92,4 +112,4 @@ export component MainWindow inherits Window {
     }
 }
 
-export { SlaveWindow, MasterWindow }
+export { SlaveWindow, MasterWindow, UiI18n }

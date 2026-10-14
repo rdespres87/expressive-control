@@ -1,3 +1,5 @@
+import { UiI18n } from "i18n_types.slint";
+
 export component SlaveView inherits Rectangle {
     width: 100%;
     height: 100%;
@@ -12,6 +14,7 @@ export component SlaveView inherits Rectangle {
     in property <float> expression: 0.0; // 0.0 to 1.0
     in property <string> frequency: "-- Hz";
     in property <string> transpose: "+0";
+    in property <UiI18n> i18n;
 
     callback switch_to_master();
 
@@ -25,7 +28,10 @@ export component SlaveView inherits Rectangle {
     property <color> tune_color: !root.is_active ? #333340 : (abs(root.cents) <= 10.0 ? perfect_color : (abs(root.cents) <= 20.0 ? warning_color : danger_color));
 
     HorizontalLayout {
-        padding: 20px;
+        padding-left: 16px;
+        padding-right: 16px;
+        padding-top: 10px;
+        padding-bottom: 10px;
         spacing: 20px;
         
         // LEFT: Volume Bargraph (CC7)
@@ -58,7 +64,7 @@ export component SlaveView inherits Rectangle {
         VerticalLayout {
             alignment: center;
             spacing: 10px;
-            width: 600px;
+            width: 640px;
             
             // TOP: Strobe / LED segment gauge placeholder (vector-rendered directly to framebuffer)
             gauge := Rectangle {
@@ -82,7 +88,7 @@ export component SlaveView inherits Rectangle {
                 alignment: center;
                 spacing: 60px;
                 Text { text: root.is_active ? root.frequency : "-- Hz"; font-size: 26px; color: #9999aa; font-weight: 700; vertical-alignment: center; }
-                Text { text: "TRANSPOSE: " + root.transpose; font-size: 26px; color: #9999aa; font-weight: 700; vertical-alignment: center; }
+                Text { text: root.i18n.transpose + root.transpose; font-size: 26px; color: #9999aa; font-weight: 700; vertical-alignment: center; }
             }
         }
 
@@ -114,35 +120,30 @@ export component SlaveView inherits Rectangle {
         }
     }
 
-    // Top-Right: Switch to Config / Master Screen Button (Placed at end of SlaveView for topmost z-order)
+    // Top-Right: Switch to Config / Master Screen Button (Shifted right, single clean label)
     config_btn := Rectangle {
-        x: root.width - self.width - 76px;
+        x: root.width - self.width - 16px;
         y: 14px;
-        width: 130px;
+        width: 154px;
         height: 48px;
-        border-radius: 10px;
+        border-radius: 12px;
         background: config_touch.pressed ? #00f0ff : (config_touch.has_hover ? #2a2a3e : #1c1c28);
         border-width: 2px;
         border-color: config_touch.pressed ? #ffffff : #00f0ff;
         
         VerticalLayout {
-            padding: 4px;
-            spacing: 1px;
             alignment: center;
-            
-            Text {
-                text: "CONFIG ▶";
-                font-size: 19px;
-                font-weight: 900;
-                color: config_touch.pressed ? #000000 : #00f0ff;
-                horizontal-alignment: center;
-            }
-            Text {
-                text: "SETTINGS";
-                font-size: 11px;
-                font-weight: 700;
-                color: config_touch.pressed ? #222230 : #88889a;
-                horizontal-alignment: center;
+            HorizontalLayout {
+                alignment: center;
+                Text {
+                    height: 28px;
+                    text: root.i18n.settings_btn;
+                    font-size: 19px;
+                    font-weight: 800;
+                    color: config_touch.pressed ? #000000 : #00f0ff;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
             }
         }
         
@@ -153,6 +154,14 @@ export component SlaveView inherits Rectangle {
                 }
             }
         }
+    }
+
+    // Force Slint software renderer embed_glyphs pass to pre-render French accented glyphs directly in SlaveView
+    Rectangle {
+        visible: false;
+        width: 0px; height: 0px; x: -1000px; y: -1000px;
+        Text { text: "RÉGLAGES réglages Réglages Settings"; font-size: 19px; font-weight: 800; }
+        Text { text: "RÉGLAGES réglages Réglages Settings"; font-size: 18px; font-weight: 800; }
     }
 }
 
@@ -170,6 +179,7 @@ export component SlaveWindow inherits Window {
     in property <float> expression <=> view.expression;
     in property <string> frequency <=> view.frequency;
     in property <string> transpose <=> view.transpose;
+    in property <UiI18n> i18n <=> view.i18n;
 
     callback switch_to_master <=> view.switch_to_master;
 

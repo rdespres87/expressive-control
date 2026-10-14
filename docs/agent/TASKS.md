@@ -38,20 +38,24 @@
 ### Hardware & Peripherals (CrowPanel 5.0" & Sensors)
 - [x] **I2C Bus Scanner**: Implémenter un scan I2C au démarrage pour détecter et valider les adresses de tous les composants embarqués de la carte CrowPanel 5.0" V3.0 (Touch GT911 à 0x5D/0x14, IO expander PCA9557 à 0x18, etc. d'après les schémas Eagle).
 - [x] **Driver Touchscreen**: Faire fonctionner l'écran tactile capacitif GT911 (initialisation/reset via PCA9557, coupure permanente de l'ampli audio PA_EN) et brancher les événements de touch sur le backend Slint.
-- [ ] **Étude Pinout & IO Expander (ADA4886 / AW9523)**:
-  - Étudier le pinout complet de la carte CrowPanel 5.0" (broches disponibles : bus I2C, GPIO 43/44, etc.).
-  - Valider l'architecture d'extension I2C (ex: module GPIO Expander ADA4886 / AW9523 ou MCP23017) pour interfacer :
-    - 2 capteurs ToF VL53L4CD (lignes XSHUT pour attribution d'adresses)
-    - 1 encodeur rotatif avec bouton cliquable
-    - 3 boutons poussoirs de navigation/contrôle
-- [ ] **Validation Double ToF direct (XSHUT sur GPIO 43 & 44 sans expander)**:
-  - Câbler les broches XSHUT des 2 VL53L4CD sur GPIO 43 et GPIO 44.
-  - Séquencer le boot pour remapper dynamiquement l'adresse I2C du second capteur (0x29 -> 0x30 / 0x31).
-  - Implémenter le polling 50 Hz des deux distances ToF (Pitch & Volume) sur l'unique bus I2C sans attendre l'expander ADA4886.
-
+- [x] **Étude Pinout, Architecture USB & IO Expander**:
+  - Validation du bus I2C unique (`GPIO 19` SDA, `GPIO 20` SCL) partagé entre l'écran tactile GT911, le PCA9557 interne, l'expander externe et les 2 capteurs ToF.
+  - Confirmation matérielle : le port USB-C existant est relié en dur au pont USB-UART CH340G (`GPIO 43/44`), empêchant l'USB-MIDI natif sur ce port sans compromettre le flash du firmware.
+  - Choix de l'expander I2C : **Waveshare MCP23017** (16 E/S, pull-ups 100k intégrés) pour centraliser :
+    - 2 sorties `XSHUT` pour le boot séquentiel des 2 VL53L4CD
+    - 3 entrées pour l'encodeur rotatif (Phase A, Phase B, Switch clic)
+    - 3 entrées pour les 3 boutons de commande
+  - Choix de l'interface USB-MIDI dédiée : module externe **RP2040-Zero** / **Seeed XIAO** configuré en esclave USB-MIDI Class Compliant.
+- [ ] **Intégration du MCP23017 & Double ToF**:
+  - Implémenter le driver MCP23017 sur le bus I2C (adresse 0x20).
+  - Séquencer le reset des lignes XSHUT des 2 VL53L4CD pour leur attribuer les adresses 0x30 et 0x31.
+  - Implémenter la boucle de lecture polling (200 Hz encodeur/boutons, 50 Hz ToF distances) sur le Core 1.
+- [ ] **Intégration du module USB-MIDI (RP2040-Zero)**:
+  - Définir le protocole de communication ESP32 ↔ RP2040 (I2C esclave ou liaison série).
+  - Émettre les paquets MIDI temps réel (NoteOn, PitchBend, CC).
 ### Interface & Ergonomie (Slint UI)
 - [x] **UI Unifiée Master / Slave (Mono-Écran)**: Vue commutable dynamique permettant de basculer entre la vue Master (réglages Root, Scale, Octave, PB range, Quantization, Filter speed) et la vue Slave (grand Strobe Tuner) via boutons tactiles (`CONFIG` / `TUNER`) avec synchronisation directe du `TofThereminProcessor` en local (mono-carte, sans passer par l'UART).
-- [ ] **Internationalisation (i18n)**: Prévoir le support multilingue (Français et Anglais pour commencer) pour l'ensemble des textes, libellés et menus de l'UI Slint.
+- [x] **Internationalisation (i18n)**: Support multilingue (Français et Anglais) via table de chaînes statiques en Rust sans allocation sur la boucle de rendu (`i18n.rs`) et commutateur interactif `[ FR / EN ]` sur l'UI Slint.
 
 ### Système, Déploiement & Outils
 - [ ] **Stratégie de Mise à Jour**: Définir et implémenter la stratégie de mise à jour firmware (OTA Wi-Fi / Web Installer, USB CDC / DFU, ou mise à jour UART inter-cartes si configuration dual-board).

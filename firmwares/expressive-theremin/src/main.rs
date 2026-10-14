@@ -24,6 +24,7 @@ slint::include_modules!();
 type ThereminUi = MainWindow;
 
 pub mod concurrency;
+pub mod i18n;
 pub mod gauge_renderer;
 pub mod platform;
 pub mod protocol;
@@ -693,6 +694,24 @@ async fn run_slave(is_demo: bool) -> Result<(), FirmwareError> {
     window.set_frequency("-- Hz".into());
     window.set_transpose("+0".into());
     window.set_is_master_view(true);
+
+    // Initial i18n (French by default)
+    let current_language = Arc::new(Mutex::new(i18n::Language::French));
+    window.set_i18n(i18n::to_slint_i18n(i18n::get_ui_strings(i18n::Language::French)));
+
+    let lang_state = Arc::clone(&current_language);
+    let win_lang = window.as_weak();
+    window.on_language_toggled(move || {
+        let mut lang = lang_state.lock().unwrap();
+        *lang = match *lang {
+            i18n::Language::French => i18n::Language::English,
+            i18n::Language::English => i18n::Language::French,
+        };
+        log::info!("[UI] Language toggled to: {:?}", *lang);
+        if let Some(w) = win_lang.upgrade() {
+            w.set_i18n(i18n::to_slint_i18n(i18n::get_ui_strings(*lang)));
+        }
+    });
 
     // Initial Master Settings
     window.set_current_root("C".into());
