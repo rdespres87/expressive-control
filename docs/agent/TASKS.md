@@ -63,11 +63,11 @@
 ### Interface & Ergonomics (Slint UI)
 - [x] **Unified Master / Slave UI (Single-Screen)**: Dynamic switchable view toggling between Master view (Root, Scale, Octave, PB range, Quantization, Filter speed) and Slave view (Strobe Tuner) via touch buttons (`CONFIG` / `TUNER`) with direct local `TofThereminProcessor` sync.
 - [x] **Internationalization (i18n)**: Zero-allocation static string table in Rust (`i18n.rs`) with interactive `[ FR / EN ]` toggle on Slint UI.
-- [ ] **Physical Navigation & Focus Management (Rotary Encoder & Hardware Buttons)**:
-  - Implement visual focus outline / highlight in Slint UI (`master.slint`) indicating the currently selected parameter card.
-  - Dual-mode encoder interaction: **Navigate mode** (rotate to cycle through parameter cards: Root, Scale, Octave, Range, PB Range, Quantization, Filter, MIDI Mode) and **Edit mode** (click to activate, rotate to adjust value, click to confirm).
-  - Hardware buttons integration: dedicated Octave + / Octave - quick-shifting and instant Mute toggle with tactile visual feedback on UI.
-  - Tuner view navigation: encoder rotation for reference pitch calibration (e.g. 440 Hz ± 10 Hz) and click to toggle between Master and Tuner views.
+- [x] **Physical Navigation & Focus Management (Rotary Encoder & Hardware Buttons)**:
+  - Implement visual focus outline / highlight in Slint UI (`master.slint`) indicating the currently selected parameter card (Gold for navigate, pulsing cyan for edit).
+  - Dual-mode encoder interaction via `NavigationController` (`navigation.rs`): **Navigate mode** (rotate to cycle through parameter cards: Root, Scale, Octave, Range, MIDI Mode, PB Range, Quantization, Filter, Tuner switch) and **Edit mode** (click to activate, rotate to adjust value, click to confirm).
+  - Hardware buttons integration: dedicated Octave + / Octave - quick-shifting and instant Mute toggle with tactile visual feedback (`MUTED` banner on UI).
+  - Tuner view navigation: encoder rotation for reference pitch calibration (440.0 Hz ± 10 Hz) and click to toggle between Master and Tuner views.
 - [ ] **Configuration Submenus & Menu Tree (Slint UI)**:
   - Architecture study documented in [docs/studies/user_configuration_and_menu_architecture.md](docs/studies/user_configuration_and_menu_architecture.md).
   - Implement hierarchical view navigation with header breadcrumb and back button (`[ < RETOUR ]`).

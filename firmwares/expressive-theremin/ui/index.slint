@@ -31,6 +31,10 @@ export component MainWindow inherits Window {
     in-out property <string> midi_mode: "Standard";
     in-out property <int> pb_range: 2;
     in-out property <string> app_version: "v0.1.0";
+    in-out property <float> ref_freq_hz: 440.0;
+    in-out property <bool> is_muted: false;
+    in-out property <int> focused_index: 0;
+    in-out property <bool> is_editing: false;
     in-out property <UiI18n> i18n;
     callback language_toggled();
 
@@ -74,6 +78,8 @@ export component MainWindow inherits Window {
         expression: root.expression;
         frequency: root.frequency;
         transpose: root.transpose;
+        ref_freq_hz: root.ref_freq_hz;
+        is_muted: root.is_muted;
         i18n: root.i18n;
 
         switch_to_master => {
@@ -96,6 +102,9 @@ export component MainWindow inherits Window {
         midi_mode <=> root.midi_mode;
         pb_range <=> root.pb_range;
         app_version <=> root.app_version;
+        focused_index <=> root.focused_index;
+        is_editing <=> root.is_editing;
+        is_muted <=> root.is_muted;
         i18n: root.i18n;
         language_toggled => { root.language_toggled(); }
 

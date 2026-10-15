@@ -27,6 +27,7 @@ pub mod front_panel;
 pub mod gauge_renderer;
 pub mod i18n;
 pub mod mcp23017;
+pub mod navigation;
 pub mod platform;
 pub mod protocol;
 pub mod rpe_flasher;
@@ -1086,7 +1087,7 @@ fn core1_sensor_dsp_task(
                         ));
                     }
                     if event.just_encoder_switch {
-                        let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::ToggleView);
+                        let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::EncoderClick);
                     }
                     if event.just_octave_up {
                         let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::OctaveUp);
@@ -1246,6 +1247,22 @@ async fn run_core0_ui_render_loop(
     let mut force_redraw_frames: u8 = 0;
     let mut last_pointer_pos = slint::LogicalPosition::new(0.0, 0.0);
 
+    let mut nav = navigation::NavigationController::default();
+    nav.sync_state(navigation::NavigationStateSync {
+        root_idx: 0, // C
+        scale_idx: 0, // Chromatic
+        octave: window.get_current_octave(),
+        octave_range: window.get_octave_range(),
+        pb_range: window.get_pb_range(),
+        is_mpe: window.get_midi_mode() == "MPE",
+        quantization: window.get_pitch_quantization(),
+        filter_speed_idx: 2, // Fast
+    });
+    window.set_focused_index(nav.focused_card.as_index() as i32);
+    window.set_is_editing(false);
+    window.set_is_muted(false);
+    window.set_ref_freq_hz(nav.ref_pitch_hz);
+
     let mut prev_is_active = window.get_is_active();
     let mut prev_note_name: &'static str = "";
     let mut prev_octave: i8 = 99;
@@ -1282,16 +1299,141 @@ async fn run_core0_ui_render_loop(
                     );
                 }
                 concurrency::UiInputEvent::EncoderDelta(delta) => {
-                    let cur_oct = window.get_current_octave();
-                    let new_oct = (cur_oct + delta as i32).clamp(0, 8);
-                    if new_oct != cur_oct {
-                        log::info!("[Core 0] Encoder delta {} -> Octave {}", delta, new_oct);
-                        window.set_current_octave(new_oct);
-                        let _ = config_tx
-                            .lock()
-                            .unwrap()
-                            .enqueue(ConfigMessage::SetBaseOctave(new_oct));
-                        window.window().request_redraw();
+                    let is_master = window.get_is_master_view();
+                    let action = nav.handle_encoder_delta(delta, is_master);
+                    window.set_focused_index(nav.focused_card.as_index() as i32);
+                    match action {
+                        navigation::NavigationAction::None => {
+                            window.window().request_redraw();
+                        }
+                        navigation::NavigationAction::UpdateRoot { note, label } => {
+                            log::info!("[Core 0] Navigation Update Root -> {}", label);
+                            window.set_current_root(label.into());
+                            let _ = config_tx
+                                .lock()
+                                .unwrap()
+                                .enqueue(ConfigMessage::SetRootNote(note));
+                            window.window().request_redraw();
+                        }
+                        navigation::NavigationAction::UpdateScale { scale, label } => {
+                            log::info!("[Core 0] Navigation Update Scale -> {}", label);
+                            window.set_current_scale(label.into());
+                            let _ = config_tx
+                                .lock()
+                                .unwrap()
+                                .enqueue(ConfigMessage::SetScale(scale));
+                            window.window().request_redraw();
+                        }
+                        navigation::NavigationAction::UpdateOctave(oct) => {
+                            log::info!("[Core 0] Navigation Update Octave -> {}", oct);
+                            window.set_current_octave(oct);
+                            let _ = config_tx
+                                .lock()
+                                .unwrap()
+                                .enqueue(ConfigMessage::SetBaseOctave(oct));
+                            window.window().request_redraw();
+                        }
+                        navigation::NavigationAction::UpdateOctaveRange(range) => {
+                            log::info!("[Core 0] Navigation Update Octave Range -> {}", range);
+                            window.set_octave_range(range);
+                            let _ = config_tx
+                                .lock()
+                                .unwrap()
+                                .enqueue(ConfigMessage::SetOctaveRange(range));
+                            window.window().request_redraw();
+                        }
+                        navigation::NavigationAction::UpdatePbRange(pb) => {
+                            log::info!("[Core 0] Navigation Update PB Range -> {}", pb);
+                            window.set_pb_range(pb);
+                            let _ = config_tx
+                                .lock()
+                                .unwrap()
+                                .enqueue(ConfigMessage::SetProcessorMode(
+                                    if nav.is_mpe {
+                                        ProcessorMode::Mpe {
+                                            manager_channel: Channel::new(0),
+                                            pitch_bend_range: pb as u8,
+                                        }
+                                    } else {
+                                        ProcessorMode::Standard {
+                                            channel: Channel::new(0),
+                                            pitch_bend_range: pb as u8,
+                                        }
+                                    },
+                                ));
+                            window.window().request_redraw();
+                        }
+                        navigation::NavigationAction::UpdateMidiMode(is_mpe) => {
+                            log::info!("[Core 0] Navigation Update MIDI Mode -> MPE: {}", is_mpe);
+                            let mode_str = if is_mpe { "MPE" } else { "Standard" };
+                            window.set_midi_mode(mode_str.into());
+                            let pb = if is_mpe { 48 } else { 2 };
+                            window.set_pb_range(pb);
+                            let _ = config_tx
+                                .lock()
+                                .unwrap()
+                                .enqueue(ConfigMessage::SetProcessorMode(
+                                    if is_mpe {
+                                        ProcessorMode::Mpe {
+                                            manager_channel: Channel::new(0),
+                                            pitch_bend_range: pb as u8,
+                                        }
+                                    } else {
+                                        ProcessorMode::Standard {
+                                            channel: Channel::new(0),
+                                            pitch_bend_range: pb as u8,
+                                        }
+                                    },
+                                ));
+                            window.window().request_redraw();
+                        }
+                        navigation::NavigationAction::UpdateQuantization(q) => {
+                            log::info!("[Core 0] Navigation Update Quantization -> {}", q);
+                            window.set_pitch_quantization(q);
+                            let _ = config_tx
+                                .lock()
+                                .unwrap()
+                                .enqueue(ConfigMessage::SetPitchQuantization(q));
+                            window.window().request_redraw();
+                        }
+                        navigation::NavigationAction::UpdateFilterSpeed { speed, label } => {
+                            log::info!("[Core 0] Navigation Update Filter Speed -> {}", label);
+                            window.set_filter_speed(label.into());
+                            let _ = config_tx
+                                .lock()
+                                .unwrap()
+                                .enqueue(ConfigMessage::SetFilterSpeed(speed));
+                            window.window().request_redraw();
+                        }
+                        navigation::NavigationAction::UpdateReferencePitch(ref_hz) => {
+                            log::info!("[Core 0] Navigation Update Ref Pitch -> {:.1} Hz", ref_hz);
+                            window.set_ref_freq_hz(ref_hz);
+                            window.window().request_redraw();
+                        }
+                        _ => {}
+                    }
+                }
+                concurrency::UiInputEvent::EncoderClick => {
+                    let is_master = window.get_is_master_view();
+                    let action = nav.handle_encoder_click(is_master);
+                    match action {
+                        navigation::NavigationAction::SwitchToTuner => {
+                            log::info!("[Core 0] Encoder Click -> Switch to Tuner");
+                            window.set_is_master_view(false);
+                            window.window().request_redraw();
+                        }
+                        navigation::NavigationAction::SwitchToMaster => {
+                            log::info!("[Core 0] Encoder Click -> Switch to Master");
+                            window.set_is_master_view(true);
+                            window.window().request_redraw();
+                        }
+                        _ => {
+                            let is_editing = nav.mode == navigation::NavigationMode::Editing;
+                            log::info!("[Core 0] Encoder Click -> is_editing: {}", is_editing);
+                            window.set_is_editing(is_editing);
+                            window.set_focused_index(nav.focused_card.as_index() as i32);
+                            window.window().request_redraw();
+                        }
                     }
                 }
                 concurrency::UiInputEvent::ToggleView => {
@@ -1301,32 +1443,33 @@ async fn run_core0_ui_render_loop(
                     window.window().request_redraw();
                 }
                 concurrency::UiInputEvent::OctaveUp => {
-                    let cur_oct = window.get_current_octave();
-                    if cur_oct < 8 {
-                        let new_oct = cur_oct + 1;
-                        log::info!("[Core 0] Octave Up -> {}", new_oct);
-                        window.set_current_octave(new_oct);
+                    let action = nav.handle_octave_up();
+                    if let navigation::NavigationAction::UpdateOctave(oct) = action {
+                        log::info!("[Core 0] Octave Up -> {}", oct);
+                        window.set_current_octave(oct);
                         let _ = config_tx
                             .lock()
                             .unwrap()
-                            .enqueue(ConfigMessage::SetBaseOctave(new_oct));
+                            .enqueue(ConfigMessage::SetBaseOctave(oct));
                         window.window().request_redraw();
                     }
                 }
                 concurrency::UiInputEvent::OctaveDown => {
-                    let cur_oct = window.get_current_octave();
-                    if cur_oct > 0 {
-                        let new_oct = cur_oct - 1;
-                        log::info!("[Core 0] Octave Down -> {}", new_oct);
-                        window.set_current_octave(new_oct);
+                    let action = nav.handle_octave_down();
+                    if let navigation::NavigationAction::UpdateOctave(oct) = action {
+                        log::info!("[Core 0] Octave Down -> {}", oct);
+                        window.set_current_octave(oct);
                         let _ = config_tx
                             .lock()
                             .unwrap()
-                            .enqueue(ConfigMessage::SetBaseOctave(new_oct));
+                            .enqueue(ConfigMessage::SetBaseOctave(oct));
                         window.window().request_redraw();
                     }
                 }
-                concurrency::UiInputEvent::MuteToggled(_) => {
+                concurrency::UiInputEvent::MuteToggled(muted) => {
+                    log::info!("[Core 0] Mute Toggled -> {}", muted);
+                    nav.is_muted = muted;
+                    window.set_is_muted(muted);
                     window.window().request_redraw();
                 }
                 concurrency::UiInputEvent::HardwareStatus(connected) => {

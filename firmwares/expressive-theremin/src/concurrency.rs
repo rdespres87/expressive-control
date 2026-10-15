@@ -124,6 +124,7 @@ pub enum UiInputEvent {
     PointerMoved { x: f32, y: f32 },
     PointerReleased,
     EncoderDelta(i8),
+    EncoderClick,
     ToggleView,
     OctaveUp,
     OctaveDown,

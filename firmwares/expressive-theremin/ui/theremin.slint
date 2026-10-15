@@ -14,6 +14,8 @@ export component SlaveView inherits Rectangle {
     in property <float> expression: 0.0; // 0.0 to 1.0
     in property <string> frequency: "-- Hz";
     in property <string> transpose: "+0";
+    in property <float> ref_freq_hz: 440.0;
+    in property <bool> is_muted: false;
     in property <UiI18n> i18n;
 
     callback switch_to_master();
@@ -86,9 +88,10 @@ export component SlaveView inherits Rectangle {
             // BOTTOM: Details
             HorizontalLayout {
                 alignment: center;
-                spacing: 60px;
-                Text { text: root.is_active ? root.frequency : "-- Hz"; font-size: 26px; color: #9999aa; font-weight: 700; vertical-alignment: center; }
-                Text { text: root.i18n.transpose + root.transpose; font-size: 26px; color: #9999aa; font-weight: 700; vertical-alignment: center; }
+                spacing: 36px;
+                Text { text: root.is_active ? root.frequency : "-- Hz"; font-size: 24px; color: #9999aa; font-weight: 700; vertical-alignment: center; }
+                Text { text: "REF " + root.ref_freq_hz + "Hz"; font-size: 22px; color: #ffd700; font-weight: 800; vertical-alignment: center; }
+                Text { text: root.i18n.transpose + root.transpose; font-size: 24px; color: #9999aa; font-weight: 700; vertical-alignment: center; }
             }
         }
 
@@ -156,6 +159,33 @@ export component SlaveView inherits Rectangle {
         }
     }
 
+    // Top-Center: MUTE Indicator Badge (Visible when hardware mute button is toggled)
+    if root.is_muted : Rectangle {
+        x: (root.width - self.width) / 2;
+        y: 14px;
+        width: 140px;
+        height: 44px;
+        border-radius: 12px;
+        background: #ff2244;
+        border-width: 2px;
+        border-color: #ffffff;
+
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                alignment: center;
+                Text {
+                    text: "MUTED";
+                    font-size: 20px;
+                    font-weight: 900;
+                    color: #ffffff;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+
     // Force Slint software renderer embed_glyphs pass to pre-render French accented glyphs directly in SlaveView
     Rectangle {
         visible: false;
@@ -179,6 +209,8 @@ export component SlaveWindow inherits Window {
     in property <float> expression <=> view.expression;
     in property <string> frequency <=> view.frequency;
     in property <string> transpose <=> view.transpose;
+    in property <float> ref_freq_hz <=> view.ref_freq_hz;
+    in property <bool> is_muted <=> view.is_muted;
     in property <UiI18n> i18n <=> view.i18n;
 
     callback switch_to_master <=> view.switch_to_master;

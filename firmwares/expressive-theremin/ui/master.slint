@@ -14,6 +14,9 @@ export component MasterView inherits Rectangle {
     in-out property <string> midi_mode: "Standard";
     in-out property <int> pb_range: 2; // 2, 12, 24, 48
     in-out property <string> app_version: "v0.1.0";
+    in-out property <int> focused_index: 0; // 0..8 (-1 for no focus)
+    in-out property <bool> is_editing: false;
+    in-out property <bool> is_muted: false;
     in property <UiI18n> i18n;
     callback language_toggled();
 
@@ -33,6 +36,8 @@ export component MasterView inherits Rectangle {
     property <color> text_color: #ffffff;
     property <color> dim_text: #666670;
     property <color> panel_bg: #1a1a24;
+    property <color> focus_nav_color: #ffd700; // Gold for navigation focus
+    property <color> focus_edit_color: #00f0ff; // Neon cyan for value editing
     
     // Helper function for roots
     property <[string]> roots: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -50,11 +55,13 @@ export component MasterView inherits Rectangle {
             spacing: 12px;
             height: 136px;
             
-            // Root Note
+            // Root Note (Card 0)
             Rectangle {
                 background: panel_bg;
                 border-radius: 14px;
                 width: 240px;
+                border-width: (root.focused_index == 0) ? (root.is_editing ? 3px : 2px) : 0px;
+                border-color: (root.focused_index == 0) ? (root.is_editing ? root.focus_edit_color : root.focus_nav_color) : transparent;
                 VerticalLayout {
                     padding: 8px; padding-left: 10px; padding-right: 10px; spacing: 6px; alignment: center;
                     Text { text: root.i18n.root_note; color: dim_text; font-size: 18px; font-weight: 700; horizontal-alignment: center; }
@@ -89,11 +96,13 @@ export component MasterView inherits Rectangle {
                 }
             }
 
-            // Scale
+            // Scale (Card 1)
             Rectangle {
                 background: panel_bg;
                 border-radius: 14px;
                 width: 321px;
+                border-width: (root.focused_index == 1) ? (root.is_editing ? 3px : 2px) : 0px;
+                border-color: (root.focused_index == 1) ? (root.is_editing ? root.focus_edit_color : root.focus_nav_color) : transparent;
                 VerticalLayout {
                     padding: 8px; padding-left: 10px; padding-right: 10px; spacing: 6px; alignment: center;
                     Text { text: root.i18n.scale; color: dim_text; font-size: 18px; font-weight: 700; horizontal-alignment: center; }
@@ -130,13 +139,13 @@ export component MasterView inherits Rectangle {
                 }
             }
 
-            // Back to Tuner (Slave View) Button (Full 183px restored)
+            // Back to Tuner (Slave View) Button (Card 8)
             Rectangle {
                 background: back_touch.pressed ? accent.darker(0.3) : panel_bg;
                 border-radius: 14px;
                 width: 183px;
-                border-width: 2px;
-                border-color: back_touch.pressed ? #ffffff : accent;
+                border-width: (root.focused_index == 8) ? 3px : 2px;
+                border-color: (root.focused_index == 8) ? root.focus_nav_color : (back_touch.pressed ? #ffffff : accent);
 
                 VerticalLayout {
                     alignment: center;
@@ -183,11 +192,13 @@ export component MasterView inherits Rectangle {
             spacing: 12px;
             height: 136px;
             
-            // Base Octave
+            // Base Octave (Card 2)
             Rectangle {
                 background: panel_bg;
                 border-radius: 14px;
                 width: 183px;
+                border-width: (root.focused_index == 2) ? (root.is_editing ? 3px : 2px) : 0px;
+                border-color: (root.focused_index == 2) ? (root.is_editing ? root.focus_edit_color : root.focus_nav_color) : transparent;
                 VerticalLayout {
                     padding: 8px; padding-left: 10px; padding-right: 10px; spacing: 6px; alignment: center;
                     Text { text: root.i18n.base_octave; color: dim_text; font-size: 16px; font-weight: 700; horizontal-alignment: center; }
@@ -224,11 +235,13 @@ export component MasterView inherits Rectangle {
                 }
             }
 
-            // Octave Range
+            // Octave Range (Card 3)
             Rectangle {
                 background: panel_bg;
                 border-radius: 14px;
                 width: 183px;
+                border-width: (root.focused_index == 3) ? (root.is_editing ? 3px : 2px) : 0px;
+                border-color: (root.focused_index == 3) ? (root.is_editing ? root.focus_edit_color : root.focus_nav_color) : transparent;
                 VerticalLayout {
                     padding: 8px; padding-left: 10px; padding-right: 10px; spacing: 6px; alignment: center;
                     Text { text: root.i18n.octave_range; color: dim_text; font-size: 16px; font-weight: 700; horizontal-alignment: center; }
@@ -265,11 +278,13 @@ export component MasterView inherits Rectangle {
                 }
             }
             
-            // MIDI Mode
+            // MIDI Mode (Card 4)
             Rectangle {
                 background: panel_bg;
                 border-radius: 14px;
                 width: 183px;
+                border-width: (root.focused_index == 4) ? (root.is_editing ? 3px : 2px) : 0px;
+                border-color: (root.focused_index == 4) ? (root.is_editing ? root.focus_edit_color : root.focus_nav_color) : transparent;
                 VerticalLayout {
                     padding: 8px; padding-left: 10px; padding-right: 10px; spacing: 6px; alignment: center;
                     Text { text: root.i18n.midi_mode; color: dim_text; font-size: 16px; font-weight: 700; horizontal-alignment: center; }
@@ -301,11 +316,13 @@ export component MasterView inherits Rectangle {
                 }
             }
 
-            // Pitch Bend Range
+            // Pitch Bend Range (Card 5)
             Rectangle {
                 background: panel_bg;
                 border-radius: 14px;
                 width: 183px;
+                border-width: (root.focused_index == 5) ? (root.is_editing ? 3px : 2px) : 0px;
+                border-color: (root.focused_index == 5) ? (root.is_editing ? root.focus_edit_color : root.focus_nav_color) : transparent;
                 VerticalLayout {
                     padding: 8px; padding-left: 10px; padding-right: 10px; spacing: 6px; alignment: center;
                     Text { text: root.i18n.pb_range; color: dim_text; font-size: 16px; font-weight: 700; horizontal-alignment: center; }
@@ -336,11 +353,13 @@ export component MasterView inherits Rectangle {
             spacing: 12px;
             height: 136px;
 
-            // Pitch Quantization (Correction) - Compacted to 364px
+            // Pitch Quantization (Card 6)
             Rectangle {
                 background: panel_bg;
                 border-radius: 14px;
                 width: 364px;
+                border-width: (root.focused_index == 6) ? (root.is_editing ? 3px : 2px) : 0px;
+                border-color: (root.focused_index == 6) ? (root.is_editing ? root.focus_edit_color : root.focus_nav_color) : transparent;
                 VerticalLayout {
                     padding: 8px; padding-left: 8px; padding-right: 8px; spacing: 6px; alignment: center;
                     Text { text: root.i18n.pitch_correction; color: dim_text; font-size: 17px; font-weight: 700; horizontal-alignment: center; }
@@ -365,11 +384,13 @@ export component MasterView inherits Rectangle {
                 }
             }
 
-            // Filter Speed (232px)
+            // Filter Speed (Card 7)
             Rectangle {
                 background: panel_bg;
                 border-radius: 14px;
                 width: 232px;
+                border-width: (root.focused_index == 7) ? (root.is_editing ? 3px : 2px) : 0px;
+                border-color: (root.focused_index == 7) ? (root.is_editing ? root.focus_edit_color : root.focus_nav_color) : transparent;
                 VerticalLayout {
                     padding: 8px; padding-left: 8px; padding-right: 8px; spacing: 6px; alignment: center;
                     Text {
@@ -497,6 +518,32 @@ export component MasterView inherits Rectangle {
             Text { text: "VUE LIVE LIVE VIEW"; font-size: 14px; font-weight: 700; }
         }
     }
+    // MUTE Indicator Badge (Centered at top when active)
+    if root.is_muted : Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: 6px;
+        width: 140px;
+        height: 36px;
+        border-radius: 12px;
+        background: #ff2244;
+        border-width: 2px;
+        border-color: #ffffff;
+
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                alignment: center;
+                Text {
+                    text: "MUTED";
+                    font-size: 18px;
+                    font-weight: 900;
+                    color: #ffffff;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
 }
 
 export component MasterWindow inherits Window {
@@ -514,6 +561,9 @@ export component MasterWindow inherits Window {
     in-out property <string> midi_mode <=> view.midi_mode;
     in-out property <int> pb_range <=> view.pb_range;
     in-out property <string> app_version <=> view.app_version;
+    in-out property <int> focused_index <=> view.focused_index;
+    in-out property <bool> is_editing <=> view.is_editing;
+    in-out property <bool> is_muted <=> view.is_muted;
     in property <UiI18n> i18n <=> view.i18n;
     callback language_toggled <=> view.language_toggled;
 
