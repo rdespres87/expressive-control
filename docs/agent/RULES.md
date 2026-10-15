@@ -21,7 +21,11 @@
 - **Hardware Isolation:** All hardware drivers and specific behaviors must be implemented in the respective firmware crates, not in the core.
 
 ## 4. Coding Standards
-- **No Panics in Production:** The use of `unwrap()`, `expect()`, or `panic!()` is strictly FORBIDDEN in production code. All errors must be handled properly using `Result`, custom error enums, and graceful degradation/logging.
+- **Zero `unwrap()` / `expect()` in Production Code (INVIOLABLE):** The presence of `.unwrap()`, `.expect()`, or `panic!()` in ANY production code (`core/`, `instruments/`, `firmwares/`) is strictly and unconditionally FORBIDDEN (exactly 0 allowed).
+  - Any error, failure, or potential `None`/`Err` MUST be handled explicitly with `Result`, `Option`, matching, graceful degradation, or safe fallbacks (e.g. `unwrap_or`, `unwrap_or_else`, `if let Ok(...)`).
+  - Mutex operations must never use `.lock().unwrap()`; always use `if let Ok(...)` or `.unwrap_or_else(|e| e.into_inner())`.
+  - `.unwrap()` is tolerated ONLY inside unit test suites (`#[cfg(test)] mod tests`) and desktop simulator scenario testing.
 - **High Test Coverage:** For every new implementation or feature, you MUST add the corresponding unit tests AND update the integration tests accordingly. Maintaining a very high test coverage across both unit and integration tests is mandatory to ensure reliability.
 - **Mandatory Post-Implementation Grill:** Always execute a final adversarial code review pass ("Grill") right after implementation and before Gate 3 commit authorization. Actively probe for edge cases, subtle logic inversions (e.g. mute vs volume, polarity, inverted ranges), concurrency race conditions / queue saturations, and add missing unit tests accordingly.
+
 
