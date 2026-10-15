@@ -1,6 +1,13 @@
 # Expressive Control
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Web Flasher](https://img.shields.io/badge/Web%20Flasher-Live%20Demo-brightgreen)](https://rdespres87.github.io/expressive-control/)
+[![Rust](https://img.shields.io/badge/Rust-2021%20edition-orange.svg)](https://www.rust-lang.org)
+
 Rust project for a modular, real-time expressive music controller and synthesizer framework.
+
+> ⚡ **Try the Web Flasher:** You can flash your CrowPanel ESP32-S3 theremin directly from Google Chrome or Microsoft Edge without installing local toolchains: [**https://rdespres87.github.io/expressive-control/**](https://rdespres87.github.io/expressive-control/)
+
 
 Architecture:
 ```
@@ -112,7 +119,21 @@ espflash flash -B 460800 --monitor --chip esp32s3 --port /dev/cu.usbserial-XXXX 
 
 ## Documentation Links
 
-- Architecture Overview: [docs/architecture.md](file:///Users/rdespres/Projets/expressive-control/docs/architecture.md)
-- Hardware Netlist & Schematics Study: [docs/studies/hardware_netlist.md](file:///Users/rdespres/Projets/expressive-control/docs/studies/hardware_netlist.md)
-- Development Rules: [docs/agent/RULES.md](file:///Users/rdespres/Projets/expressive-control/docs/agent/RULES.md)
-- Agent State & Tasks: [docs/agent/SESSION_STATE.md](file:///Users/rdespres/Projets/expressive-control/docs/agent/SESSION_STATE.md) & [docs/agent/TASKS.md](file:///Users/rdespres/Projets/expressive-control/docs/agent/TASKS.md)
+- Architecture Overview: [docs/architecture.md](docs/architecture.md)
+- Hardware Netlist & Schematics Study: [docs/studies/hardware_netlist.md](docs/studies/hardware_netlist.md)
+- Development Rules: [docs/agent/RULES.md](docs/agent/RULES.md)
+- Agent State & Tasks: [docs/agent/SESSION_STATE.md](docs/agent/SESSION_STATE.md) & [docs/agent/TASKS.md](docs/agent/TASKS.md)
+
+---
+
+## Contributing
+
+Contributions, issues, and feature requests are welcome!  
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for architectural guidelines, real-time constraints, and development workflow.
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+

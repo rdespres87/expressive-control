@@ -10,12 +10,16 @@ V0.6 ToF Theremin Prototype (ESP32-S3 + CrowPanel 5.0" Slint UI)
 Hardware-in-the-Loop validation of real-time dual-core performance and RP2040-Zero USB-MIDI coprocessor design.
 
 ## Last completed
-- Implemented and validated Didactic Web Flasher (`tools/web-flasher`) with WebSerial API (commit `1c0bcfa`):
+- Configured Open Source Project Governance (commit `5f3663d`):
+  - Created official MIT License (`LICENSE`) for permissive open-source distribution.
+  - Added developer contribution guide (`CONTRIBUTING.md`) with real-time zero-heap rules and PR workflow.
+  - Added GitHub Issue Templates (`.github/ISSUE_TEMPLATE/bug_report.md`, `feature_request.md`, `config.yml`).
+  - Added status badges and live Web Flasher links to `README.md`.
+- Implemented and deployed Didactic Web Flasher (`tools/web-flasher`) with WebSerial API:
   - Zero-install, browser-based 1-click update writing unified factory image (`0x0000`).
   - Full bilingual i18n support (French/English with browser auto-detection and live header toggle).
   - Crash-proof hardware RTS reboot sequence and interactive step navigation.
-  - Dedicated zero-cache local server (`tools/web-flasher/server.py`).
-  - Automated GitHub Pages deployment workflow (`.github/workflows/deploy-flasher.yml`).
+  - Published live to GitHub Pages: https://rdespres87.github.io/expressive-control/
 - Optimized Slint Graphic Rendering Performance on CrowPanel 5.0" (commit `c557c64`).
 
 ## Next action

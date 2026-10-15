@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Online Web Firmware Flasher
+    url: https://rdespres87.github.io/expressive-control/
+    about: Update your Expressive Theremin firmware directly in Chrome/Edge in 1-click.
+  - name: Project Documentation
+    url: https://github.com/rdespres87/expressive-control/blob/main/README.md
+    about: Read architecture documentation, hardware netlists, and developer guides.
