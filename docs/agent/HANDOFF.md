@@ -1,27 +1,27 @@
 ## Context
-Completed implementation of **Physical Navigation & Focus Management (Rotary Encoder & Hardware Buttons)** in Slint UI and firmware for the CrowPanel ESP32-S3 theremin:
-- **Navigation Controller (`firmwares/expressive-theremin/src/navigation.rs`)**:
-  - Implemented `NavigationController` state machine tracking `NavigationMode` (`Navigating` vs `Editing`) and `FocusedCard` across all 9 parameter cards (Root Note, Scale, Octave, Octave Range, MIDI Mode, Pitch Bend Range, Pitch Quantization, Filter Speed, Tuner Switch).
-  - Rotary encoder rotation navigates through cards or adjusts the active parameter in Edit mode with automatic wrap-around and boundary clamping.
-  - Encoder push button toggles between navigation and parameter edit modes (or toggles views when Tuner card is focused).
-  - Dedicated hardware buttons provide instant Octave Up / Octave Down shifting and instant Mute toggle with state synchronization back to the DSP core via `ConfigMessage`.
-  - Strobe Tuner reference pitch calibration (440 Hz ± 10 Hz) adjustable via encoder rotation when in Edit mode.
-  - 7 unit tests covering state transitions, wrapping, calibration clamping, and button shortcuts.
-- **Concurrency & Event Flow (`firmwares/expressive-theremin/src/concurrency.rs` & `main.rs`)**:
-  - Added `UiInputEvent::EncoderClick` to front-panel input queue.
-  - Polled in Core 1 (`APP_CPU`) front-panel loop on `event.just_encoder_switch` and dispatched to Core 0 (`PRO_CPU`) Slint UI rendering task without heap allocations.
-- **Slint UI Visual Feedback (`master.slint`, `theremin.slint`, `index.slint`)**:
-  - Rendered distinct border highlights on all parameter cards: Gold (2px) in Navigate mode, pulsing Cyan (3px) in Edit mode.
-  - Added centered `[ MUTED ]` badge across both Master and Tuner views.
-  - Displayed live reference frequency (`REF: 440.0 Hz`) in Tuner view.
+Completed **Flash Memory & Slint Multi-Window Font Optimization** on CrowPanel ESP32-S3 theremin:
+- **Root Cause & Discovery**:
+  - Uncovered that exporting legacy `SlaveWindow` and `MasterWindow` alongside `MainWindow` in Slint caused the Slint software compiler to generate 3 separate, identical copies of all pre-rendered font bitmap tables in `.flash.rodata` (`SLINT_EMBEDDED_RESOURCE_0`, `_1`, `_2`).
+- **Implementation**:
+  - Streamlined `firmwares/expressive-theremin/ui/index.slint` to export only `MainWindow` and `UiI18n`.
+  - Removed unused `SlaveWindow` and `MasterWindow` wrappers from `theremin.slint` and `master.slint`.
+  - Updated desktop `simulator` (`simulator/src/main.rs`) to instantiate `MainWindow` directly using its built-in `is_master_view` toggle.
+  - Maintained 100% fidelity on UI typography: all existing font sizes and the iconic 140px bold Tuner Note display (`C#4` on single line) are strictly preserved.
+- **Results**:
+  - Reclaimed **1.75 MB of Flash memory**: Application partition footprint dropped from **3.72 MB (90.2% partition)** down to **1.97 MB (47.8% partition)**.
+  - Created over **2.15 MB of free headroom** in Flash for upcoming configuration submenus and NVS presets.
+  - Reduced serial flashing time by 20 seconds (down to 32 seconds at 460,800 baud).
+- **Rule Enforcement**:
+  - Production code contains exactly **0 `.unwrap()` or `.expect()`** (protected by pre-commit hook).
+  - All 56 workspace tests pass.
+  - Zero compiler or clippy warnings.
 
 ## Verification
-- Unit tests: `cargo test -p expressive-core -p theremin -p elf2uf2` passed cleanly (25 passed).
-- Firmware compilation and test harness: `cargo check --tests` in `firmwares/expressive-theremin` passed with 0 errors.
-- Linters: `cargo fmt --all -- --check` and `cargo clippy --workspace -- -D warnings` passed with 0 warnings.
-- Documentation: updated `docs/agent/TASKS.md` and `docs/agent/SESSION_STATE.md`.
+- Unit tests: `cargo test` (56 passed across `expressive-core`, `theremin`, `elf2uf2`, `simulator`).
+- Linters: `cargo fmt --all -- --check` and `cargo clippy --workspace -- -D warnings` (0 warnings).
+- Flashed and tested directly on physical CrowPanel 5.0" ESP32-S3 hardware via `/dev/cu.usbserial-1420`.
+- Documentation: `docs/agent/TASKS.md` and `docs/agent/SESSION_STATE.md` synchronized.
 
 ## Next Logical Action
-1. Bench validation of Time-of-Flight sensors (VL53L4CD) on the physical CrowPanel I2C bus.
+1. Bench validation of Time-of-Flight sensors (VL53L4CD) on physical CrowPanel I2C bus.
 2. Implement Configuration Submenus & Menu Tree (Slint UI) and NVS flash preset persistence as defined in `docs/studies/user_configuration_and_menu_architecture.md`.
-

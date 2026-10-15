@@ -194,29 +194,3 @@ export component SlaveView inherits Rectangle {
         Text { text: "RÉGLAGES réglages Réglages Settings"; font-size: 18px; font-weight: 800; }
     }
 }
-
-export component SlaveWindow inherits Window {
-    width: 800px;
-    height: 480px;
-    background: #0c0b0f;
-    title: "Theremin Tuner (Slave)";
-
-    in property <string> note_name <=> view.note_name;
-    in property <string> octave <=> view.octave;
-    in property <float> cents <=> view.cents;
-    in property <bool> is_active <=> view.is_active;
-    in property <float> volume <=> view.volume;
-    in property <float> expression <=> view.expression;
-    in property <string> frequency <=> view.frequency;
-    in property <string> transpose <=> view.transpose;
-    in property <float> ref_freq_hz <=> view.ref_freq_hz;
-    in property <bool> is_muted <=> view.is_muted;
-    in property <UiI18n> i18n <=> view.i18n;
-
-    callback switch_to_master <=> view.switch_to_master;
-
-    view := SlaveView {
-        width: 100%;
-        height: 100%;
-    }
-}

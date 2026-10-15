@@ -57,7 +57,7 @@ fn open_virtual_midi_port() -> Result<MidiOutputConnection, SimError> {
     Err(SimError::UnsupportedPlatform)
 }
 
-fn apply_snapshot(ui: &SlaveWindow, snapshot: &DisplaySnapshot) {
+fn apply_snapshot(ui: &MainWindow, snapshot: &DisplaySnapshot) {
     // Note: pitch_note is e.g. "C#4" or "D5"
     // We split it into name ("C#") and octave ("4")
     let note_str = snapshot.pitch_note.as_str();
@@ -147,8 +147,10 @@ fn run_pc_mode(scenario: Scenario, is_theremin: bool) -> Result<(), SimError> {
     }
 
     println!("🎸 Using Theremin Instrument Logic");
-    let ui_slave = SlaveWindow::new().map_err(SimError::Ui)?;
-    let ui_master = MasterWindow::new().map_err(SimError::Ui)?;
+    let ui_slave = MainWindow::new().map_err(SimError::Ui)?;
+    ui_slave.set_is_master_view(false);
+    let ui_master = MainWindow::new().map_err(SimError::Ui)?;
+    ui_master.set_is_master_view(true);
 
     let ui_slave_handle = ui_slave.as_weak();
     // ui_master_handle could be used later

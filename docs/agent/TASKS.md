@@ -67,7 +67,10 @@
   - Implement visual focus outline / highlight in Slint UI (`master.slint`) indicating the currently selected parameter card (Gold for navigate, pulsing cyan for edit).
   - Dual-mode encoder interaction via `NavigationController` (`navigation.rs`): **Navigate mode** (rotate to cycle through parameter cards: Root, Scale, Octave, Range, MIDI Mode, PB Range, Quantization, Filter, Tuner switch) and **Edit mode** (click to activate, rotate to adjust value, click to confirm).
   - Hardware buttons integration: dedicated Octave + / Octave - quick-shifting and instant Mute toggle with tactile visual feedback (`MUTED` banner on UI).
-  - Tuner view navigation: encoder rotation for reference pitch calibration (440.0 Hz ± 10 Hz) and click to toggle between Master and Tuner views.
+- [x] **Flash Memory & Slint Multi-Window Font Optimization**:
+  - Eliminated 3x font bitmap table duplication caused by exporting legacy `SlaveWindow` and `MasterWindow` alongside `MainWindow` in Slint.
+  - Slashed firmware image footprint from 3.72 MB (90.2% partition) down to 1.97 MB (47.8% partition), reclaiming 1.75 MB of Flash and opening 2.15 MB headroom.
+  - Preserved 100% of the UI typography and original 140px bold tuner note display.
 - [ ] **Configuration Submenus & Menu Tree (Slint UI)**:
   - Architecture study documented in [docs/studies/user_configuration_and_menu_architecture.md](docs/studies/user_configuration_and_menu_architecture.md).
   - Implement hierarchical view navigation with header breadcrumb and back button (`[ < RETOUR ]`).
