@@ -28,4 +28,13 @@
 - **High Test Coverage:** For every new implementation or feature, you MUST add the corresponding unit tests AND update the integration tests accordingly. Maintaining a very high test coverage across both unit and integration tests is mandatory to ensure reliability.
 - **Mandatory Post-Implementation Grill:** Always execute a final adversarial code review pass ("Grill") right after implementation and before Gate 3 commit authorization. Actively probe for edge cases, subtle logic inversions (e.g. mute vs volume, polarity, inverted ranges), concurrency race conditions / queue saturations, and add missing unit tests accordingly.
 
+## 5. Orchestration & Security Gates (INVIOLABLE)
+- **Automatic Grill Orchestration:** For all non-trivial engineering tasks (architecture changes, memory optimizations, UI overhauls, submenus, protocol changes, drivers), you MUST automatically trigger and follow the `grill-orchestrator` workflow:
+  - **Gate 1 (Plan Approval):** Draft the solution in an Artifact with `RequestFeedback: true`. Wait for explicit user approval before touching code.
+  - **Adversarial Inquisitor Review:** Mercilessly audit code for memory bloat, hardware decoupling, `no_std` constraints, and silent errors.
+  - **Post-Implementation Grill & Unit Tests:** Probe for race conditions, queue saturation, and boundary inversions; add missing unit tests.
+  - **Gate 3 (Commit Approval):** Present the full `git diff` and summary in chat and explicitly ask authorization before `git commit`.
+  - **No Remote Push:** Local commits only; `git push` is forbidden unless the user explicitly commands it.
+
+
 
