@@ -10,19 +10,20 @@ V0.6 ToF Theremin Prototype (ESP32-S3 + CrowPanel 5.0" Slint UI)
 Hardware-in-the-Loop validation of real-time dual-core performance and RP2040-Zero USB-MIDI coprocessor design.
 
 ## Last completed
-- Implemented and rigorously grilled Unified Firmware Update System (commit `2854aac`).
-- Integrated System Version Badge (`v0.1.0`) on Slint Master configuration view (commit `b632336`).
-- Created pure Rust zero-dependency `tools/elf2uf2` tool and generated `rp2040-i2c-bootloader.uf2` (commit `55c476d`).
-- Synchronized and updated `README.md` (commit `2a0cddc`).
-- Optimized Slint Graphic Rendering Performance on CrowPanel 5.0" (commit `c557c64`):
-  - FreeRTOS direct ISR task notification (`vTaskGenericNotifyGiveFromISR` / `ulTaskGenericNotifyTake`) replacing VSYNC busy-wait loop.
-  - Subpixel vector rasterizer fast-path with squared distance clamping and precomputed 101 tick geometries (`PRECOMPUTED_TICKS`).
-  - Zero-heap UI diffing in 60 FPS loop with `heapless::String` stack formatting.
-  - Bench verified on physical CrowPanel 5.0" LCD: ultra-fluid Strobe Tuner needle animation and responsive touch.
+- Implemented and validated Didactic Web Flasher (`tools/web-flasher`) with WebSerial API (commit `1c0bcfa`):
+  - Zero-install, browser-based 1-click update writing unified factory image (`0x0000`).
+  - Full bilingual i18n support (French/English with browser auto-detection and live header toggle).
+  - Crash-proof hardware RTS reboot sequence and interactive step navigation.
+  - Dedicated zero-cache local server (`tools/web-flasher/server.py`).
+  - Automated GitHub Pages deployment workflow (`.github/workflows/deploy-flasher.yml`).
+- Optimized Slint Graphic Rendering Performance on CrowPanel 5.0" (commit `c557c64`).
 
 ## Next action
-- Physical Navigation & Focus Management in Slint UI (rotary encoder navigation/edit modes and hardware button shortcuts).
-- Implement Didactic Web Flasher (WebSerial) for one-click USB firmware update in Chrome/Edge.
-- Bench validation of ToF distance sensors (VL53L4CD) on physical CrowPanel I2C bus.
+- Implement Physical Navigation & Focus Management in Slint UI (`master.slint` + `main.rs`):
+  - Parameter card focus outline / highlight for keyboard / encoder navigation.
+  - Dual-mode rotary encoder control: Navigate mode (cycle parameters) vs Edit mode (adjust value).
+  - Hardware button shortcuts (Octave + / -, instant Mute).
+  - Reference pitch calibration (440 Hz ± 10 Hz) in Strobe Tuner view.
+- Bench validation of dual ToF distance sensors (VL53L4CD) on physical CrowPanel I2C bus.
 
 
