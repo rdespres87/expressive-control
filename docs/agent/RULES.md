@@ -1,9 +1,11 @@
 # Project Rules
 
 ## 1. Language Rules
-- **Code Comments:** ALL code comments (including rustdoc `///` and inline `//`) MUST be written in English.
-- **Documentation:** ALL markdown files, architecture documents, and agent state files MUST be written in English.
-- **Commit Messages:** ALL commit messages MUST be written in English.
+- **English-Only Repository:** ALL repository contents MUST be authored exclusively in English without exception:
+  - **Documentation & Studies:** ALL markdown files (`*.md`), architecture studies (`docs/studies/`), design specifications, and agent state files MUST be written in English. Even when the user converses in French, NEVER write repository documentation in French.
+  - **Code & Comments:** ALL code, rustdoc (`///`), and inline comments (`//`) MUST be written in English.
+  - **Commit Messages:** ALL commit messages and PR descriptions MUST be written in English.
+
 
 ## 2. Git & Version Control
 - **Conventional Commits:** ALL commit messages MUST follow the Conventional Commits specification.

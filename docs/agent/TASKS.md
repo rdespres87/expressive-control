@@ -68,6 +68,20 @@
   - Dual-mode encoder interaction: **Navigate mode** (rotate to cycle through parameter cards: Root, Scale, Octave, Range, PB Range, Quantization, Filter, MIDI Mode) and **Edit mode** (click to activate, rotate to adjust value, click to confirm).
   - Hardware buttons integration: dedicated Octave + / Octave - quick-shifting and instant Mute toggle with tactile visual feedback on UI.
   - Tuner view navigation: encoder rotation for reference pitch calibration (e.g. 440 Hz ± 10 Hz) and click to toggle between Master and Tuner views.
+- [ ] **Configuration Submenus & Menu Tree (Slint UI)**:
+  - Architecture study documented in [docs/studies/user_configuration_and_menu_architecture.md](docs/studies/user_configuration_and_menu_architecture.md).
+  - Implement hierarchical view navigation with header breadcrumb and back button (`[ < RETOUR ]`).
+  - Categorized submenus:
+    - **Presets Manager**: Slot selection (1 to 8), Save, Recall, Rename, and Factory Reset.
+    - **Musical Scales & DSP**: Key root, Microtonal / Maqam / Just intonation scales, Quantization curve, PB range.
+    - **Sensors Calibration**: Distance boundaries for Pitch and Volume ToF sensors (VL53L4CD), zero-point offset, filter smoothing.
+    - **MIDI & Protocol**: Channel routing, MPE master/member channels, CC mappings, RP2040 coprocessor status.
+    - **System & Info**: Firmware versions, bilingual toggle, display brightness, I2C bus diagnostic.
+- [ ] **Non-Destructive User Presets Persistence (ESP-IDF NVS Flash)**:
+  - Implement `UserPreset` serialization format with magic header (`0x45585052`), schema versioning, and CRC32 integrity check.
+  - Dedicate persistent storage in ESP32-S3 `nvs` partition (`0x9000`), strictly isolated from the application code partition (`0x10000`) so firmware updates never erase user configurations.
+  - Implement active state auto-save at power-down and transparent migration fallback to hardcoded factory presets (`ROM`).
+  - Web Flasher safeguard: transition from monolithic `0x0000` image (`theremin-factory.bin`) to segmented write (`app.bin` @ `0x10000`) so web updates preserve existing musician NVS blocks.
 
 ### System, Deployment & Tools
 - [x] **Firmware Update Strategy (Unified CrowPanel USB -> RP2040 I2C ISP)**:
@@ -83,4 +97,5 @@
 - [x] **Automated Web Flasher Deployment (GitHub Pages)**: Configured GitHub Actions workflow (`.github/workflows/deploy-flasher.yml`) to automatically publish `tools/web-flasher` to GitHub Pages upon push/release, providing musicians with a zero-install public HTTPS web URL.
 - [ ] **Composite USB Device (MIDI + CDC)**: Support simultaneous USB-MIDI and serial CDC via TinyUSB for HIL simulation and live debug.
 - [ ] **GUI Telemetry Tool (Telemetry Viewer)**: Finalize host utility to decode and render hardware telemetry logs in real time.
+
 

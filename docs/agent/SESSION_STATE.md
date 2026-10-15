@@ -9,8 +9,11 @@ V0.6 ToF Theremin Prototype (ESP32-S3 + CrowPanel 5.0" Slint UI)
 ## Current task
 Hardware-in-the-Loop validation of real-time dual-core performance and RP2040-Zero USB-MIDI coprocessor design.
 
-## Last completed
-- Configured Open Source Project Governance (commit `5f3663d`):
+- Documented User Configuration & Flash Persistence Architecture ([docs/studies/user_configuration_and_menu_architecture.md](docs/studies/user_configuration_and_menu_architecture.md)):
+  - Analyzed ESP32-S3 Flash partition table (`partitions.csv`) and NVS isolation (`0x9000`) vs firmware updates (`0x10000`).
+  - Formalized non-destructive `UserPreset` data structure (schema versioning, CRC32, 8 slots + active state).
+  - Designed Slint UI hierarchical menu tree and double navigation model (touch + physical rotary encoder).
+- Configured Open Source Project Governance (commit `33a523e`):
   - Created official MIT License (`LICENSE`) for permissive open-source distribution.
   - Added developer contribution guide (`CONTRIBUTING.md`) with real-time zero-heap rules and PR workflow.
   - Added GitHub Issue Templates (`.github/ISSUE_TEMPLATE/bug_report.md`, `feature_request.md`, `config.yml`).
