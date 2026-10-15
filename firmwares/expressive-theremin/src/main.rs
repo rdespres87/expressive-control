@@ -33,6 +33,16 @@ pub mod protocol;
 pub mod rpe_flasher;
 pub mod touch;
 
+#[inline]
+fn enqueue_config(
+    tx: &Mutex<heapless::spsc::Producer<'static, ConfigMessage>>,
+    msg: ConfigMessage,
+) {
+    if let Ok(mut producer) = tx.lock() {
+        let _ = producer.enqueue(msg);
+    }
+}
+
 /// Defines the hardware architecture the firmware is built for.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ThereminMode {
@@ -672,10 +682,7 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
     let tx_oct = Arc::clone(&config_tx);
     window.on_octave_changed(move |octave| {
         log::info!("[UI Master] Base Octave changed: {}", octave);
-        let _ = tx_oct
-            .lock()
-            .unwrap()
-            .enqueue(ConfigMessage::SetBaseOctave(octave));
+        enqueue_config(&tx_oct, ConfigMessage::SetBaseOctave(octave));
     });
 
     let tx_scale = Arc::clone(&config_tx);
@@ -688,7 +695,7 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
             "Penta" => Scale::Pentatonic,
             _ => Scale::Chromatic,
         };
-        let _ = tx_scale.lock().unwrap().enqueue(ConfigMessage::SetScale(s));
+        enqueue_config(&tx_scale, ConfigMessage::SetScale(s));
     });
 
     let tx_root = Arc::clone(&config_tx);
@@ -709,19 +716,13 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
             "B" => RootNote::B,
             _ => RootNote::C,
         };
-        let _ = tx_root
-            .lock()
-            .unwrap()
-            .enqueue(ConfigMessage::SetRootNote(r));
+        enqueue_config(&tx_root, ConfigMessage::SetRootNote(r));
     });
 
     let tx_range = Arc::clone(&config_tx);
     window.on_range_changed(move |r| {
         log::info!("[UI Master] Octave Range changed: {}", r);
-        let _ = tx_range
-            .lock()
-            .unwrap()
-            .enqueue(ConfigMessage::SetOctaveRange(r));
+        enqueue_config(&tx_range, ConfigMessage::SetOctaveRange(r));
     });
 
     let tx_pb = Arc::clone(&config_tx);
@@ -741,10 +742,7 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
                     pitch_bend_range: r as u8,
                 }
             };
-            let _ = tx_pb
-                .lock()
-                .unwrap()
-                .enqueue(ConfigMessage::SetProcessorMode(proc_mode));
+            enqueue_config(&tx_pb, ConfigMessage::SetProcessorMode(proc_mode));
         }
     });
 
@@ -765,20 +763,14 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
                     pitch_bend_range: r as u8,
                 }
             };
-            let _ = tx_mode
-                .lock()
-                .unwrap()
-                .enqueue(ConfigMessage::SetProcessorMode(target_mode));
+            enqueue_config(&tx_mode, ConfigMessage::SetProcessorMode(target_mode));
         }
     });
 
     let tx_quant = Arc::clone(&config_tx);
     window.on_quantization_changed(move |q| {
         log::info!("[UI Master] Quantization changed: {}%", q);
-        let _ = tx_quant
-            .lock()
-            .unwrap()
-            .enqueue(ConfigMessage::SetPitchQuantization(q));
+        enqueue_config(&tx_quant, ConfigMessage::SetPitchQuantization(q));
     });
 
     let tx_filter = Arc::clone(&config_tx);
@@ -790,10 +782,7 @@ async fn run_display_instrument(is_single_screen: bool) -> Result<(), FirmwareEr
             "Fast" => FilterSpeed::Fast,
             _ => FilterSpeed::Fast,
         };
-        let _ = tx_filter
-            .lock()
-            .unwrap()
-            .enqueue(ConfigMessage::SetFilterSpeed(s));
+        enqueue_config(&tx_filter, ConfigMessage::SetFilterSpeed(s));
     });
 
     let win_switch = window.as_weak();
@@ -1309,58 +1298,44 @@ async fn run_core0_ui_render_loop(
                         navigation::NavigationAction::UpdateRoot { note, label } => {
                             log::info!("[Core 0] Navigation Update Root -> {}", label);
                             window.set_current_root(label.into());
-                            let _ = config_tx
-                                .lock()
-                                .unwrap()
-                                .enqueue(ConfigMessage::SetRootNote(note));
+                            enqueue_config(&config_tx, ConfigMessage::SetRootNote(note));
                             window.window().request_redraw();
                         }
                         navigation::NavigationAction::UpdateScale { scale, label } => {
                             log::info!("[Core 0] Navigation Update Scale -> {}", label);
                             window.set_current_scale(label.into());
-                            let _ = config_tx
-                                .lock()
-                                .unwrap()
-                                .enqueue(ConfigMessage::SetScale(scale));
+                            enqueue_config(&config_tx, ConfigMessage::SetScale(scale));
                             window.window().request_redraw();
                         }
                         navigation::NavigationAction::UpdateOctave(oct) => {
                             log::info!("[Core 0] Navigation Update Octave -> {}", oct);
                             window.set_current_octave(oct);
-                            let _ = config_tx
-                                .lock()
-                                .unwrap()
-                                .enqueue(ConfigMessage::SetBaseOctave(oct));
+                            enqueue_config(&config_tx, ConfigMessage::SetBaseOctave(oct));
                             window.window().request_redraw();
                         }
                         navigation::NavigationAction::UpdateOctaveRange(range) => {
                             log::info!("[Core 0] Navigation Update Octave Range -> {}", range);
                             window.set_octave_range(range);
-                            let _ = config_tx
-                                .lock()
-                                .unwrap()
-                                .enqueue(ConfigMessage::SetOctaveRange(range));
+                            enqueue_config(&config_tx, ConfigMessage::SetOctaveRange(range));
                             window.window().request_redraw();
                         }
                         navigation::NavigationAction::UpdatePbRange(pb) => {
                             log::info!("[Core 0] Navigation Update PB Range -> {}", pb);
                             window.set_pb_range(pb);
-                            let _ = config_tx
-                                .lock()
-                                .unwrap()
-                                .enqueue(ConfigMessage::SetProcessorMode(
-                                    if nav.is_mpe {
-                                        ProcessorMode::Mpe {
-                                            manager_channel: Channel::new(0),
-                                            pitch_bend_range: pb as u8,
-                                        }
-                                    } else {
-                                        ProcessorMode::Standard {
-                                            channel: Channel::new(0),
-                                            pitch_bend_range: pb as u8,
-                                        }
-                                    },
-                                ));
+                            enqueue_config(
+                                &config_tx,
+                                ConfigMessage::SetProcessorMode(if nav.is_mpe {
+                                    ProcessorMode::Mpe {
+                                        manager_channel: Channel::new(0),
+                                        pitch_bend_range: pb as u8,
+                                    }
+                                } else {
+                                    ProcessorMode::Standard {
+                                        channel: Channel::new(0),
+                                        pitch_bend_range: pb as u8,
+                                    }
+                                }),
+                            );
                             window.window().request_redraw();
                         }
                         navigation::NavigationAction::UpdateMidiMode(is_mpe) => {
@@ -1369,40 +1344,32 @@ async fn run_core0_ui_render_loop(
                             window.set_midi_mode(mode_str.into());
                             let pb = if is_mpe { 48 } else { 2 };
                             window.set_pb_range(pb);
-                            let _ = config_tx
-                                .lock()
-                                .unwrap()
-                                .enqueue(ConfigMessage::SetProcessorMode(
-                                    if is_mpe {
-                                        ProcessorMode::Mpe {
-                                            manager_channel: Channel::new(0),
-                                            pitch_bend_range: pb as u8,
-                                        }
-                                    } else {
-                                        ProcessorMode::Standard {
-                                            channel: Channel::new(0),
-                                            pitch_bend_range: pb as u8,
-                                        }
-                                    },
-                                ));
+                            enqueue_config(
+                                &config_tx,
+                                ConfigMessage::SetProcessorMode(if is_mpe {
+                                    ProcessorMode::Mpe {
+                                        manager_channel: Channel::new(0),
+                                        pitch_bend_range: pb as u8,
+                                    }
+                                } else {
+                                    ProcessorMode::Standard {
+                                        channel: Channel::new(0),
+                                        pitch_bend_range: pb as u8,
+                                    }
+                                }),
+                            );
                             window.window().request_redraw();
                         }
                         navigation::NavigationAction::UpdateQuantization(q) => {
                             log::info!("[Core 0] Navigation Update Quantization -> {}", q);
                             window.set_pitch_quantization(q);
-                            let _ = config_tx
-                                .lock()
-                                .unwrap()
-                                .enqueue(ConfigMessage::SetPitchQuantization(q));
+                            enqueue_config(&config_tx, ConfigMessage::SetPitchQuantization(q));
                             window.window().request_redraw();
                         }
                         navigation::NavigationAction::UpdateFilterSpeed { speed, label } => {
                             log::info!("[Core 0] Navigation Update Filter Speed -> {}", label);
                             window.set_filter_speed(label.into());
-                            let _ = config_tx
-                                .lock()
-                                .unwrap()
-                                .enqueue(ConfigMessage::SetFilterSpeed(speed));
+                            enqueue_config(&config_tx, ConfigMessage::SetFilterSpeed(speed));
                             window.window().request_redraw();
                         }
                         navigation::NavigationAction::UpdateReferencePitch(ref_hz) => {
@@ -1447,10 +1414,7 @@ async fn run_core0_ui_render_loop(
                     if let navigation::NavigationAction::UpdateOctave(oct) = action {
                         log::info!("[Core 0] Octave Up -> {}", oct);
                         window.set_current_octave(oct);
-                        let _ = config_tx
-                            .lock()
-                            .unwrap()
-                            .enqueue(ConfigMessage::SetBaseOctave(oct));
+                        enqueue_config(&config_tx, ConfigMessage::SetBaseOctave(oct));
                         window.window().request_redraw();
                     }
                 }
@@ -1459,10 +1423,7 @@ async fn run_core0_ui_render_loop(
                     if let navigation::NavigationAction::UpdateOctave(oct) = action {
                         log::info!("[Core 0] Octave Down -> {}", oct);
                         window.set_current_octave(oct);
-                        let _ = config_tx
-                            .lock()
-                            .unwrap()
-                            .enqueue(ConfigMessage::SetBaseOctave(oct));
+                        enqueue_config(&config_tx, ConfigMessage::SetBaseOctave(oct));
                         window.window().request_redraw();
                     }
                 }
