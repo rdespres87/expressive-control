@@ -75,11 +75,12 @@
   - ESP32-S3 Master Flasher (`rpe_flasher.rs`) streaming blocks over internal I2C bus at startup.
   - Automated RP2040 build and ELF extraction in `expressive-theremin/build.rs`.
   - Offline zero-dependency pure Rust `tools/elf2uf2` generator producing `rp2040-i2c-bootloader.uf2` for initial USB bootstrap.
-- [ ] **Didactic Web Flasher (WebSerial)**: Zero-install web update utility running in Chrome/Edge. Allows end-users to flash unified theremin firmware releases (`ESP32-S3 + RP2040`) in one click via the CrowPanel USB-C port with interactive step-by-step guidance.
+- [x] **Didactic Web Flasher (WebSerial)**: Zero-install web update utility running in Chrome/Edge. Allows end-users to flash unified theremin firmware releases (`ESP32-S3 + RP2040`) in one click via the CrowPanel USB-C port with interactive step-by-step guidance.
 - [x] **Slint Graphic Rendering Performance Optimization**:
   - Replace VSYNC busy-wait loop in `platform.rs` with zero-CPU FreeRTOS ISR task notifications.
   - Precompute 101 tick geometries (`PRECOMPUTED_TICKS`) and implement squared-distance fast-path in `gauge_renderer.rs`.
   - Eliminate heap `format!` string allocations in 60 FPS UI loop via conditional diffing and `heapless::String` stack formatting.
+- [x] **Automated Web Flasher Deployment (GitHub Pages)**: Configured GitHub Actions workflow (`.github/workflows/deploy-flasher.yml`) to automatically publish `tools/web-flasher` to GitHub Pages upon push/release, providing musicians with a zero-install public HTTPS web URL.
 - [ ] **Composite USB Device (MIDI + CDC)**: Support simultaneous USB-MIDI and serial CDC via TinyUSB for HIL simulation and live debug.
 - [ ] **GUI Telemetry Tool (Telemetry Viewer)**: Finalize host utility to decode and render hardware telemetry logs in real time.
 

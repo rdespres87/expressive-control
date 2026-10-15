@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="app_title">Expressive Theremin — Web Firmware Flasher</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎛️</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=3">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-logo">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3v18"/>
+                        <circle cx="12" cy="3" r="1.5" fill="currentColor"/>
+                        <path d="M7.5 9.5c-1.5 1-2.5 2.5-2.5 4.5s1 3.5 2.5 4.5"/>
+                        <path d="M16.5 9.5c1.5 1 2.5 2.5 2.5 4.5s-1 3.5-2.5 4.5"/>
+                        <path d="M4 6.5C1.5 8.5 0 11.5 0 14s1.5 5.5 4 7.5"/>
+                        <path d="M20 6.5c2.5 2 4 5 4 7.5s-1.5 5.5-4 7.5"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="brand-title">Expressive Theremin</h1>
+                    <span class="brand-subtitle" data-i18n="brand_subtitle">Mise à Jour de votre Instrument</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="lang-selector" title="Changer de langue / Change language">
+                    <span class="lang-globe">🌐</span>
+                    <button id="btn-lang-fr" class="lang-btn active" type="button">FR</button>
+                    <span class="lang-divider">|</span>
+                    <button id="btn-lang-en" class="lang-btn" type="button">EN</button>
+                </div>
+                <div id="connection-indicator" class="status-badge disconnected">
+                    <span class="status-dot"></span>
+                    <span id="connection-text" data-i18n="status_disconnected">Non connecté</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Browser Compatibility Alert (Hidden if WebSerial is supported) -->
+        <div id="browser-warning" class="banner warning hidden">
+            <div class="banner-icon">⚠️</div>
+            <div class="banner-content">
+                <strong data-i18n="browser_warning_title">Navigateur non compatible WebSerial</strong>
+                <p data-i18n="browser_warning_desc">Cette application nécessite l'API WebSerial. Veuillez ouvrir cette page avec <strong>Google Chrome</strong>, <strong>Microsoft Edge</strong>, <strong>Brave</strong> ou <strong>Opera</strong>.</p>
+            </div>
+        </div>
+
+        <!-- Stepper Navigation -->
+        <nav class="stepper" aria-label="Étapes de mise à jour">
+            <div class="step-item active" id="step-nav-1" data-step="1">
+                <div class="step-circle">1</div>
+                <div class="step-label" data-i18n="step_1_nav">Connexion</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" id="step-nav-2" data-step="2">
+                <div class="step-circle">2</div>
+                <div class="step-label" data-i18n="step_2_nav">Version</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" id="step-nav-3" data-step="3">
+                <div class="step-circle">3</div>
+                <div class="step-label" data-i18n="step_3_nav">Installation</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" id="step-nav-4" data-step="4">
+                <div class="step-circle">4</div>
+                <div class="step-label" data-i18n="step_4_nav">Prêt !</div>
+            </div>
+        </nav>
+
+        <!-- Main Card Area -->
+        <main class="wizard-container">
+            <!-- STEP 1: Connect -->
+            <section id="step-1" class="wizard-step active">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 data-i18n="step_1_title">Étape 1 : Connectez votre Thérémine</h2>
+                        <p class="card-desc" data-i18n="step_1_desc">Reliez votre Thérémine Expressif à votre ordinateur à l'aide d'un câble USB standard.</p>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="diagram-box">
+                            <div class="device-node host-node">
+                                <span class="node-icon">💻</span>
+                                <span class="node-title" data-i18n="node_computer">Ordinateur</span>
+                            </div>
+                            <div class="cable-connector">
+                                <span class="cable-line"></span>
+                                <span class="cable-badge" data-i18n="badge_usb">Câble USB</span>
+                            </div>
+                            <div class="device-node device-target">
+                                <span class="node-icon">🎛️</span>
+                                <span class="node-title" data-i18n="node_instrument">Thérémine Expressif</span>
+                                <span class="node-sub" data-i18n="node_instrument_sub">Instrument de musique</span>
+                            </div>
+                        </div>
+
+                        <!-- Instrument Detection Info Card (revealed upon connection) -->
+                        <div id="chip-info-card" class="chip-info-box hidden">
+                            <div class="chip-info-header">
+                                <span class="chip-check-icon">✓</span>
+                                <div>
+                                    <h3 id="chip-name" data-i18n="chip_detected_title">Thérémine Détecté & Prêt</h3>
+                                    <span id="chip-mac" class="chip-sub" data-i18n="chip_mac_sub">Identifiant instrument : Connecté</span>
+                                </div>
+                            </div>
+                            <div class="chip-metrics-grid">
+                                <div class="metric-item">
+                                    <span class="metric-label" data-i18n="metric_audio">Système Audio</span>
+                                    <span id="chip-flash-size" class="metric-value" data-i18n="metric_ready">Prêt</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label" data-i18n="metric_usb">Connexion USB</span>
+                                    <span class="metric-value" data-i18n="metric_high_speed">Haute Vitesse</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label" data-i18n="metric_midi">Sortie MIDI</span>
+                                    <span class="metric-value text-accent" data-i18n="metric_builtin">Intégrée</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-footer" id="step-1-footer">
+                        <button id="btn-connect" class="btn btn-primary btn-large">
+                            <span class="btn-icon">⚡</span>
+                            <span id="btn-connect-text" data-i18n="btn_connect">Connecter mon Thérémine</span>
+                        </button>
+                        <div id="step-1-connected-actions" class="connected-actions hidden">
+                            <button id="btn-disconnect" class="btn btn-secondary">
+                                <span data-i18n="btn_disconnect">Déconnecter</span>
+                            </button>
+                            <button id="btn-continue-step-2" class="btn btn-primary">
+                                <span data-i18n="btn_continue_to_step_2">Continuer vers le logiciel →</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STEP 2: Firmware Selection -->
+            <section id="step-2" class="wizard-step">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 data-i18n="step_2_title">Étape 2 : Version du Logiciel</h2>
+                        <p class="card-desc" data-i18n="step_2_desc">Choisissez la version à installer sur votre instrument.</p>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="firmware-card selected">
+                            <div class="firmware-badge" data-i18n="badge_recommended">Recommandé</div>
+                            <div class="firmware-title-row">
+                                <h3 data-i18n="firmware_title">Système v0.1.0 — Version Officielle</h3>
+                                <span class="firmware-tag" data-i18n="firmware_tag">Mise à jour complète</span>
+                            </div>
+                            <p class="firmware-desc" data-i18n="firmware_desc">Dernière mise à jour logicielle officielle de l'instrument. Intègre le nouvel accordeur stroboscopique haute précision, le moteur sonore expressif et la compatibilité USB-MIDI universelle.</p>
+                            <ul class="features-list">
+                                <li data-i18n="feat_1">✨ Accordeur Stroboscopique haute précision et grand écran tactile</li>
+                                <li data-i18n="feat_2">⚡ Réponse musicale instantanée et affichage ultra-fluide (60 FPS)</li>
+                                <li data-i18n="feat_3">🎹 Sortie USB-MIDI universelle pour synthétiseurs et logiciels MAO</li>
+                                <li data-i18n="feat_4">🇫🇷 Interface multilingue (Français & Anglais)</li>
+                            </ul>
+                        </div>
+
+                        <!-- Advanced Drop Zone for Custom Binaries -->
+                        <details class="custom-binary-accordion">
+                            <summary data-i18n="accordion_advanced">Options avancées : installer un fichier personnalisé (.bin)</summary>
+                            <div class="drop-zone" id="drop-zone">
+                                <span class="drop-icon">📁</span>
+                                <p data-i18n="drop_zone_text">Glissez-déposez un fichier .bin ici ou cliquez pour parcourir</p>
+                                <input type="file" id="file-input" accept=".bin" class="hidden-input">
+                                <span id="custom-file-name" class="custom-file-label"></span>
+                            </div>
+                        </details>
+                    </div>
+
+                    <div class="card-footer space-between">
+                        <button id="btn-back-step-1" class="btn btn-secondary" data-i18n="btn_back">← Retour</button>
+                        <button id="btn-to-step-3" class="btn btn-primary" data-i18n="btn_to_step_3">Continuer vers l'installation →</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STEP 3: Flashing Process -->
+            <section id="step-3" class="wizard-step">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 data-i18n="step_3_title">Étape 3 : Installation en cours</h2>
+                        <p class="card-desc" data-i18n="step_3_desc">Veuillez patienter quelques instants sans débrancher le câble USB.</p>
+                    </div>
+
+                    <div class="card-body">
+                        <!-- Progress Visualizer -->
+                        <div class="progress-box">
+                            <div class="progress-header">
+                                <span id="progress-phase-label" class="phase-title" data-i18n="phase_ready">Prêt à installer</span>
+                                <span id="progress-percentage" class="percentage-value">0%</span>
+                            </div>
+                            <div class="progress-track">
+                                <div id="progress-bar" class="progress-fill"></div>
+                            </div>
+                            <div class="progress-footer">
+                                <span id="progress-subtext" class="subtext"></span>
+                                <span id="progress-speed" class="speed-value"></span>
+                            </div>
+                        </div>
+
+                        <!-- Guidance Checklist -->
+                        <div class="checklist-box">
+                            <div class="check-item done">
+                                <span class="check-mark">✓</span>
+                                <span data-i18n="check_1">Connexion avec l'instrument établie</span>
+                            </div>
+                            <div class="check-item active" id="check-flash">
+                                <span class="check-mark">⏳</span>
+                                <span id="check-flash-text" data-i18n="check_2">Installation du nouveau système logiciel</span>
+                            </div>
+                            <div class="check-item" id="check-verify">
+                                <span class="check-mark">○</span>
+                                <span data-i18n="check_3">Vérification et redémarrage automatique</span>
+                            </div>
+                        </div>
+
+                        <!-- Toggleable Terminal Logs Drawer -->
+                        <details id="terminal-drawer" class="terminal-drawer">
+                            <summary class="terminal-summary">
+                                <span data-i18n="terminal_summary">Afficher le journal technique détaillé (pour les curieux)</span>
+                                <button id="btn-clear-logs" class="btn btn-tiny" type="button" data-i18n="btn_clear">Effacer</button>
+                            </summary>
+                            <div id="terminal-output" class="terminal-logs"></div>
+                        </details>
+                    </div>
+
+                    <div class="card-footer space-between">
+                        <button id="btn-back-step-2" class="btn btn-secondary" data-i18n="btn_cancel">← Annuler</button>
+                        <button id="btn-start-flash" class="btn btn-accent btn-large">
+                            <span class="btn-icon">🚀</span>
+                            <span id="btn-start-flash-text" data-i18n="btn_start_flash">Lancer la mise à jour</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STEP 4: Success Screen -->
+            <section id="step-4" class="wizard-step">
+                <div class="card success-card">
+                    <div class="success-icon-wrap">
+                        <div class="success-icon">✓</div>
+                    </div>
+
+                    <div class="card-header text-center">
+                        <h2 data-i18n="step_4_title">Mise à jour terminée avec succès !</h2>
+                        <p class="card-desc" data-i18n="step_4_desc">Votre Thérémine Expressif est à jour et prêt à jouer.</p>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="info-callout">
+                            <div class="callout-icon">💡</div>
+                            <div class="callout-body">
+                                <strong data-i18n="callout_title">Ce qui se passe maintenant :</strong>
+                                <p data-i18n="callout_desc">L'instrument redémarre automatiquement avec sa nouvelle version. L'écran s'allume avec le panneau de réglages et l'accordeur stroboscopique.</p>
+                                <p style="margin-top: 8px; font-size: 0.85rem; opacity: 0.85;" data-i18n="callout_note"><em>Note : Si l'écran ne s'allume pas immédiatement selon votre modèle de câble USB, appuyez brièvement sur le bouton <strong>RESET</strong> situé à l'arrière ou rebranchez le câble.</em></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-footer text-center">
+                        <button id="btn-restart-wizard" class="btn btn-primary btn-large">
+                            <span data-i18n="btn_finish">Terminer & Jouer 🎶</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p data-i18n="footer_brand">Projet Expressive Control — Instrument de musique Open Source</p>
+            <p class="footer-links">
+                <a href="../../README.md" target="_blank" data-i18n="link_doc">Documentation</a> •
+                <a href="https://github.com/rdespres/expressive-control" target="_blank" data-i18n="link_github">GitHub</a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- Application Script (ES Module) -->
+    <script type="module" src="app.js?v=3"></script>
+</body>
+</html>
