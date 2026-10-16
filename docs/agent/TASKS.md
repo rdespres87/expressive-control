@@ -57,8 +57,12 @@
   - Pin sensor polling (GT911 touch, MCP23017, ToF ranging) and musical DSP to **Core 1** (`APP_CPU`) at 100 Hz (10ms), isolated from LCD VSYNC.
   - Pin Slint UI and LCD RGB DMA flush to **Core 0** (`PRO_CPU`) at 60 FPS.
   - Inter-core communication: wait-free SeqLock `AtomicTunerSnapshot` for musical state, lock-free SPSC `heapless::spsc::Queue` for touch/encoder UI input events and configuration changes.
-- [x] **USB-MIDI Firmware (RP2040-Zero)**:
-  - Implement RP2040 I2C Target firmware (`firmwares/rp2040-usb-midi`) receiving 3-byte MIDI packets and streaming Class-Compliant USB-MIDI to host DAW. Relocated to `0x10004000`.
+- [x] **USB-MIDI Firmware & Hot-Plug Architecture (RP2040-Zero)**:
+  - 32 KB fail-safe I2C Target Bootloader (`firmwares/rp2040-i2c-bootloader`) at `0x1000_0000` with cold-boot vector table & CRC32 auto-jump and soft-reset OTA entry (`0xFB`).
+  - Class-Compliant USB-MIDI coprocessor (`firmwares/rp2040-usb-midi`) relocated to `0x1000_8000` with zero blocking UART latency in I2C packet handling (<2µs per packet).
+  - ESP32 host dynamic hot-plug recovery state machine (`rpe_flasher.rs` & `main.rs`): detects disconnect via I2C write error monitoring, probes `0x40` every 500ms, automatically boots/updates the RP2040, and resumes streaming without restarting the ESP32.
+  - Expressive 32-second musical simulation (*Over the Rainbow* in F major) with smooth cubic hermite portamento (octave leap `F4 -> F5`), delayed theremin vibrato (~5.3 Hz, ~35 cents), and triple continuous dynamics (Channel Pressure, CC7 Volume, CC11 Expression).
+  - Modernized GitHub Actions CI (`.github/workflows/ci.yml`) verifying host formatting, clippy, unit tests, and RP2040 `thumbv6m-none-eabi` embedded targets.
 
 ### Interface & Ergonomics (Slint UI)
 - [x] **Unified Master / Slave UI (Single-Screen)**: Dynamic switchable view toggling between Master view (Root, Scale, Octave, PB range, Quantization, Filter speed) and Slave view (Strobe Tuner) via touch buttons (`CONFIG` / `TUNER`) with direct local `TofThereminProcessor` sync.

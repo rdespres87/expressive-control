@@ -58,11 +58,13 @@ The Core is strictly `#![no_std]`, independent of hardware. Host platforms (PC S
   - Hardware `XSHUT` control for sequential boot of dual ToF sensors (`0x30` / `0x31`).
   - Resilient hardware fallback: operates cleanly if expander or sensors are absent.
 
-### 3. Auxiliary RP2040-Zero USB-MIDI Coprocessor
+### 3. Auxiliary RP2040-Zero USB-MIDI Coprocessor & Hot-Plug Architecture
 - **Why a Coprocessor?** The onboard USB-C port of the CrowPanel 5.0" is hardwired to a CH340G USB-UART bridge (`GPIO 43/44`). To provide true Class-Compliant USB-MIDI without hardware conflict or breaking firmware flashing, a **Waveshare RP2040-Zero** acts as an I2C Target (`0x40`) USB-MIDI bridge.
-- **Unified In-System Firmware Update (I2C ISP)**:
-  - **`rp2040-i2c-bootloader`**: 16 KB fail-safe bootloader residing at `0x10000000`. Listens on I2C `0x40` during boot for flash commands. Supports ROM sector erase and page programming with IEEE 802.3 CRC32 verification.
-  - **`rpe_flasher.rs`**: Built into `expressive-theremin`. At boot, the ESP32-S3 checks the coprocessor version over I2C. If absent or outdated, it automatically reboots the RP2040 into its bootloader and flashes the updated USB-MIDI binary in < 1 second.
+- **Unified In-System Firmware Update (I2C ISP) & Hot-Plug Resilience**:
+  - **`rp2040-i2c-bootloader`**: 32 KB fail-safe bootloader residing at `0x1000_0000` (occupies ~19.5 KB in ROM). On cold power-on or USB hot-plug, it validates the application vector table (MSP, Reset Handler) and IEEE 802.3 CRC32, jumping immediately to `0x1000_8000`. On explicit `CMD_ENTER_BOOTLOADER (0xFB)`, it remains in bootloader mode (`0xB0`, Soft Blue LED) for flashing.
+  - **`rp2040-usb-midi`**: Relocated to `0x1000_8000` with dynamic VTOR. Features a zero-latency lock-free packet processing pipeline pushing USB short packets (<64 bytes) to the host DAW.
+  - **`rpe_flasher.rs` & Hot-Plug Recovery**: Built into `expressive-theremin`. Continuously tracks I2C write status; if the coprocessor is disconnected, the ESP32 enters a background recovery mode, probing `0x40` every 500 ms and restoring full USB-MIDI streaming within 50 ms of reconnection.
+  - **Expressive Simulation**: Built-in 32-second lyrical simulation of *Over the Rainbow* (F major) featuring smooth cubic hermite portamento (octave leap `F4 -> F5`), delayed theremin vibrato (~5.3 Hz, ~35 cents), and triple continuous dynamics (Channel Pressure, CC7 Volume, CC11 Expression).
   - **`tools/elf2uf2`**: Zero-dependency pure Rust utility generating `rp2040-i2c-bootloader.uf2` for the initial drag-and-drop bootstrap onto the RP2040 USB mass storage drive (`RPI-RP2`).
 
 ---

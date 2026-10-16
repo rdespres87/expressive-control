@@ -7,39 +7,41 @@ IN_PROGRESS
 V0.6 ToF Theremin Prototype (ESP32-S3 + CrowPanel 5.0" Slint UI)
 
 ## Current task
-Hardware-in-the-Loop validation of real-time dual-core performance and RP2040-Zero USB-MIDI coprocessor design.
+Hardware-in-the-Loop validation of real-time dual-core performance, RP2040-Zero USB-MIDI coprocessor pipeline, and "Over the Rainbow" expressive theremin simulation.
 
-- Implemented Physical Navigation & Focus Management in Slint UI & Firmware:
-  - Added `NavigationController` state machine (`firmwares/expressive-theremin/src/navigation.rs`) managing `Navigating` vs `Editing` modes.
-  - Rotary encoder rotation cycles cards in Navigate mode and adjusts parameters in Edit mode (Root Note, Scale, Octave, Octave Range, MIDI Mode, Pitch Bend Range, Pitch Quantization, Filter Speed, Tuner Switch).
-  - Rotary encoder click toggles between Navigate and Edit modes (or toggles between Master and Tuner views).
-  - Dedicated hardware buttons provide instant Octave Up / Down shifting and instant Mute toggle.
-  - Slint UI (`master.slint`, `theremin.slint`, `index.slint`) displays dynamic focus highlights (Gold for Navigating, Cyan for Editing), centered `[ MUTED ]` badge, and A4 reference pitch calibration (440 Hz ± 10 Hz).
-  - Full real-time decoupling maintained: Core 1 polls MCP23017 front-panel events and dispatches via lock-free queue to Core 0 Slint UI.
-- Documented User Configuration & Flash Persistence Architecture ([docs/studies/user_configuration_and_menu_architecture.md](docs/studies/user_configuration_and_menu_architecture.md)):
-  - Analyzed ESP32-S3 Flash partition table (`partitions.csv`) and NVS isolation (`0x9000`) vs firmware updates (`0x10000`).
-  - Formalized non-destructive `UserPreset` data structure (schema versioning, CRC32, 8 slots + active state).
-  - Designed Slint UI hierarchical menu tree and double navigation model (touch + physical rotary encoder).
-- Configured Open Source Project Governance (commit `33a523e`):
-  - Created official MIT License (`LICENSE`) for permissive open-source distribution.
-  - Added developer contribution guide (`CONTRIBUTING.md`) with real-time zero-heap rules and PR workflow.
-  - Added GitHub Issue Templates (`.github/ISSUE_TEMPLATE/bug_report.md`, `feature_request.md`, `config.yml`).
-  - Added status badges and live Web Flasher links to `README.md`.
-- Implemented and deployed Didactic Web Flasher (`tools/web-flasher`) with WebSerial API:
-  - Zero-install, browser-based 1-click update writing unified factory image (`0x0000`).
-  - Full bilingual i18n support (French/English with browser auto-detection and live header toggle).
-  - Crash-proof hardware RTS reboot sequence and interactive step navigation.
-  - Published live to GitHub Pages: https://rdespres87.github.io/expressive-control/
-- Completed Flash Memory & Slint Font Optimization (commit pending):
-  - Discovered and fixed 3x font bitmap duplication caused by exporting legacy `SlaveWindow` and `MasterWindow` alongside `MainWindow` in Slint.
-  - Streamlined `ui/index.slint` to export only `MainWindow` and `UiI18n`. Updated desktop `simulator` to use `MainWindow` with `is_master_view` toggle.
-  - Reclaimed **1.75 MB of Flash memory** (dropping partition usage from **3.72 MB / 90.2%** down to **1.97 MB / 47.8%**), opening up **2.15 MB of free headroom**.
-  - Reduced serial flash duration by 20 seconds (down to 32 seconds at 460,800 baud).
-  - Maintained 100% visual fidelity: full typographic diversity and original 140px bold Tuner Note display preserved.
-  - Zero `.unwrap()` in production code (enforced by pre-commit hook), 56/56 tests pass, zero clippy warnings.
+- Physical Waveshare RP2040-Zero ("RPE") USB-MIDI Coprocessor Bring-Up:
+  - Hardware & Pinout confirmed & validated:
+    - CrowPanel 4-pin connector: Pin 1 GND (Noir), Pin 2 3V3 (Rouge), Pin 3 SDA (Blanc), Pin 4 SC/SCL (Jaune).
+    - RP2040-Zero pins: Noir -> GND, Blanc (SDA) -> GP0, Jaune (SCL) -> GP1.
+    - Debug UART1: GP4 (TX -> FTDI RX Jaune), GP5 (RX -> FTDI TX Orange), GND (Noir) @ 115200 baud.
+  - Successfully diagnosed and fixed IRQ 0 / GT911 touch screen freeze:
+    - Root cause: Missing `rt` feature in `embassy-rp` prevented `TIMER_IRQ_0` ISR compilation.
+    - Fix: Added `rt` feature to `embassy-rp`, `-C link-arg=--undefined=TIMER_IRQ_0`, and explicit W1C clear of timer alarm 0 in `DefaultHandler`.
+- Full I2C Bootloader & USB-MIDI OTA Pipeline Complete & Validated on Hardware:
+  - Bootloader expanded to 32KB slot (`0x1000_0000` .. `0x1000_8000`) with size optimizations (`opt-level = "z"`, `codegen-units = 1`, `panic = "abort"`).
+  - `rp2040-usb-midi` compiled at offset `0x1000_8000` (`memory.x` aligned, VTOR set to `0x1000_8000`).
+  - Cold-boot bus fault eliminated by strictly initializing Embassy (`embassy_rp::init()`) before any GPIO/SIO register access.
+  - ESP32 flasher (`rpe_flasher.rs`) automatically checks CRC32 (`0x89DF6A1C`) and flashes RP2040 over I2C in ~2 seconds.
+  - RP2040 boots cleanly into Application mode (solid Magenta LED) and streams USB-MIDI directly to macOS.
+  - CrowPanel GT911 touch screen 100% fluid and responsive at 60 FPS (zero bus contention or clock stretching).
+- Expressive Simulation: "Over the Rainbow" (Volet 2 Complete & Validated in Surge XT):
+  - Created `firmwares/expressive-theremin/src/simulation.rs` implementing a continuous 32-second lyrical trajectory in F major.
+  - Continuous cubic hermite portamento (glissando) for the iconic octave leap `F4 -> F5`.
+  - Natural delayed vibrato (~5.3 Hz LFO ramping in after note onset, ~35 cents depth).
+  - Expressive volume dynamics (left-hand phrasing, subtle volume tremolo synchronized with vibrato, soft fade-out).
+  - Triple dynamics forwarding: Channel Pressure (Aftertouch) + CC7 (Volume) + CC11 (Expression) over USB-MIDI.
+  - Fully verified and audible in Surge XT, with real-time tuner and needle animations on the CrowPanel LCD.
+
+- USB-MIDI Hot-Plug Resilience & Grill Validation Complete:
+  - Cold-Boot Auto-Jump: `rp2040-i2c-bootloader` validates vector table (MSP in SRAM, Reset Handler in Flash with Thumb bit) and CRC32; jumps to `0x1000_8000` in ~10ms on power-on reset unless forced via `WATCHDOG_SCRATCH0`.
+  - Latency Optimization: Removed blocking `uart_print` from `rp2040-usb-midi` I2C packet handling (<2µs processing).
+  - Dynamic Disconnect / Hotplug Recovery: ESP32 detects I2C packet write failures, sets `rpe_ready = false`, and polls `0x40` every 500ms; automatically boots or updates the RP2040 and resumes streaming.
+  - Live OTA update verified on hardware: ESP32 detected updated app binary (`0x4FE35190`), triggered soft reset to bootloader, reflashed all blocks, and confirmed `Coprocessor re-connected and ready!`.
 
 ## Next action
-- Bench validation of dual ToF distance sensors (VL53L4CD) on physical CrowPanel I2C bus.
-- Implement configuration submenus & preset NVS flash persistence based on `docs/studies/user_configuration_and_menu_architecture.md`.
+1. Copy updated `rp2040-i2c-bootloader.uf2` to RP2040 in BOOTSEL mode to enable cold-boot auto-jump on power cycle.
+2. Test USB replug on macOS: observe automatic enumeration and streaming recovery.
+3. Review / restore user configuration and submenus NVS state (`poc-submenus-and-nvs`).
+
 
 
