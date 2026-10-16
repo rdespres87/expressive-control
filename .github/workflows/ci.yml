@@ -1,0 +1,46 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    name: Build, Lint & Test (Host + RP2040)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: thumbv6m-none-eabi
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "host"
+
+      - name: Install System Dependencies (ALSA, Udev, Fontconfig)
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libfontconfig1-dev
+
+      - name: Check Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint with Clippy (Workspace)
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Run Unit Tests (Core, Simulator, Theremin, Elf2Uf2)
+        run: cargo test -p expressive-core -p simulator -p theremin -p elf2uf2
+
+      - name: Lint & Check RP2040 Bootloader
+        run: cd firmwares/rp2040-i2c-bootloader && cargo clippy --target thumbv6m-none-eabi -- -D warnings
+
+      - name: Lint & Check RP2040 USB-MIDI Coprocessor
+        run: cd firmwares/rp2040-usb-midi && cargo clippy --target thumbv6m-none-eabi -- -D warnings

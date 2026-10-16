@@ -182,4 +182,67 @@ mod tests {
                                            // Data1: 74 (0x4A), Data2: 127 (0x7F)
         assert_eq!(packet.as_bytes(), &[0x1B, 0xB0, 74, 0x7F]);
     }
+
+    #[test]
+    fn test_cc7_volume_usb_midi() {
+        let packet = UsbMidiPacket::from_midi(0, 0xB0, 7, 100);
+        // Cable 0, CIN 0x0B (CC), Status 0xB0, Data1: 7, Data2: 100
+        assert_eq!(packet.as_bytes(), &[0x0B, 0xB0, 7, 100]);
+    }
+
+    #[test]
+    fn test_cc11_expression_usb_midi() {
+        let packet = UsbMidiPacket::from_midi(0, 0xB0, 11, 64);
+        // Cable 0, CIN 0x0B (CC), Status 0xB0, Data1: 11, Data2: 64
+        assert_eq!(packet.as_bytes(), &[0x0B, 0xB0, 11, 64]);
+    }
+
+    #[test]
+    fn test_pitch_bend_extremes_usb_midi() {
+        // Minimum bend (0) -> LSB: 0, MSB: 0
+        let min_event = InstrumentEvent::PitchBend {
+            channel: Channel::new(0),
+            bend: U14::new(0),
+        };
+        let min_pkt = min_event.to_usb_midi(0);
+        assert_eq!(min_pkt.as_bytes(), &[0x0E, 0xE0, 0x00, 0x00]);
+
+        // Maximum bend (16383) -> LSB: 0x7F, MSB: 0x7F
+        let max_event = InstrumentEvent::PitchBend {
+            channel: Channel::new(0),
+            bend: U14::new(16383),
+        };
+        let max_pkt = max_event.to_usb_midi(0);
+        assert_eq!(max_pkt.as_bytes(), &[0x0E, 0xE0, 0x7F, 0x7F]);
+    }
+
+    #[test]
+    fn test_cable_number_multiplexing() {
+        for cable in 0..16 {
+            let pkt = UsbMidiPacket::from_midi(cable, 0x90, 60, 100);
+            assert_eq!(pkt.as_bytes()[0] >> 4, cable);
+            assert_eq!(pkt.as_bytes()[0] & 0x0F, 0x09); // NoteOn CIN
+        }
+    }
+
+    #[test]
+    fn test_channel_pressure_boundaries() {
+        let min_press = InstrumentEvent::ChannelPressure {
+            channel: Channel::new(3),
+            pressure: U7::new(0),
+        };
+        assert_eq!(
+            min_press.to_usb_midi(0).as_bytes(),
+            &[0x0D, 0xD3, 0x00, 0x00]
+        );
+
+        let max_press = InstrumentEvent::ChannelPressure {
+            channel: Channel::new(3),
+            pressure: U7::new(127),
+        };
+        assert_eq!(
+            max_press.to_usb_midi(0).as_bytes(),
+            &[0x0D, 0xD3, 0x7F, 0x00]
+        );
+    }
 }
