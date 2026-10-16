@@ -152,9 +152,9 @@ The firmware must be built with:
    - **Solution**: Native USB-MIDI is delegated to an auxiliary microcontroller (**Raspberry Pi RP2040-Zero** / **Seeed XIAO**) operating as an **I2C Target (Slave) at address `0x40`** on the shared 4-pin I2C bus (`SDA`=19, `SCL`=20). The RP2040 exposes a dedicated, plug-and-play USB-C MIDI device interface to the host DAW/synthesizer while leaving the CrowPanel USB-C port 100% available for firmware flashing and debugging.
 7. **Shared I2C Bus Speed & Bandwidth Analysis (400 kHz Fast Mode)**:
    - **Device Frequency Limits**: The slowest devices on the bus (**Goodix GT911** and **NXP PCA9557**) have a datasheet maximum rating of **400 kHz (Fast Mode)**. While the ST VL53L4CD and RP2040 support 1 MHz (Fast Mode Plus), the entire bus is harmonized at **400 kHz**.
-   - **Bandwidth Consumption**: At 400 kHz, continuous sensor polling (2× ToF @ 50 Hz = 0.6 ms/20 ms), front-panel controls (MCP23017 @ 100 Hz = 0.15 ms/10 ms), touch input (GT911 @ 60 Hz = 1.5 ms/16.6 ms), and real-time MIDI packet transmission (RP2040 write @ ~90 µs/event) consume **less than 8% total bus bandwidth**, leaving >92% idle time.
-8. **Peripheral Expansion via MCP23017**:
-   - All external human interface controls (1 rotary encoder with click switch, 3 pushbuttons) and the 2 `XSHUT` control lines for the VL53L4CD ToF distance sensors are aggregated onto an external **Waveshare MCP23017** on the shared I2C bus (`0x20`), requiring zero additional dedicated GPIOs on the ESP32.
+   - **Bandwidth Consumption**: At 400 kHz, continuous sensor polling (2× ToF @ 50 Hz = 0.6 ms/20 ms), front-panel controls (RP2040 input report @ 100 Hz = 0.10 ms/10 ms), touch input (GT911 @ 60 Hz = 1.5 ms/16.6 ms), and real-time MIDI packet transmission (RP2040 write @ ~90 µs/event) consume **less than 7% total bus bandwidth**, leaving >93% idle time.
+8. **Peripheral Expansion & Human I/O (RP2040-Zero Coprocessor)**:
+   - All external human interface controls (EC11 rotary encoder with click switch, 3 pushbuttons on GP14, GP15, GP26) and the 2 `XSHUT` control lines for the VL53L4CD ToF distance sensors (GP2, GP3) are aggregated directly onto the auxiliary **RP2040-Zero Coprocessor** (`0x40`), completely eliminating the need for an external MCP23017 expander.
 
 ## Bug Fix: Struct Layout Mismatch (2026-10-09)
 

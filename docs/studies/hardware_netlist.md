@@ -1,6 +1,6 @@
 # ToF Theremin: Detailed Electrical Netlist & Wiring Guide
 
-This document serves as the master electrical wiring guide (Netlist) for the ToF Theremin project. It details every physical connection required between the Elecrow ESP32-S3 5.0" CrowPanel module, the external MCP23017 I/O expander, the dual VL53L4CD ToF distance sensors, and the auxiliary RP2040-Zero USB-MIDI coprocessor.
+This document serves as the master electrical wiring guide (Netlist) for the ToF Theremin project. It details every physical connection required between the Elecrow ESP32-S3 5.0" CrowPanel module, the dual VL53L4CD ToF distance sensors, and the auxiliary RP2040-Zero Coprocessor (which centralizes all front-panel buttons, rotary encoder, and ToF reset lines).
 
 ## 1. Power Distribution Bus
 The entire digital logic operates on **3.3V**. The CrowPanel module's onboard regulator supplies 3.3V from the 5V USB input. **Do not connect 5V to any external logic pins.**
@@ -9,8 +9,7 @@ The entire digital logic operates on **3.3V**. The CrowPanel module's onboard re
 | :--- | :--- | :--- | :--- |
 | `3V3` (Expansion / Grove) | Left ToF (VL53L4CD) | `VIN` / `VCC` | Power for Volume Sensor |
 | `3V3` (Expansion / Grove) | Right ToF (VL53L4CD) | `VIN` / `VCC` | Power for Pitch Sensor |
-| `3V3` (Expansion / Grove) | Waveshare MCP23017 | `VCC` | Power for I/O Expander |
-| `3V3` (Expansion / Grove) | RP2040-Zero | `3V3` | Logic power (or 5V to `5V` pin) |
+| `3V3` (Expansion / Grove) | RP2040-Zero | `3V3` | Logic power (3.3V logic supply) |
 | `GND` (Expansion / Grove) | **All Components** | `GND` | **Common Ground.** All GND pins tied together. |
 
 ---
