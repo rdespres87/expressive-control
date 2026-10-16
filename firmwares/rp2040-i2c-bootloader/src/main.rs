@@ -328,6 +328,10 @@ async fn main(_spawner: Spawner) {
     // Status LED: Soft Blue (R=0, G=0, B=16) indicating Bootloader mode
     set_status_led(0, 0, 16);
 
+    // Hold ToF sensors in reset while in bootloader (GP2, GP3 Output LOW)
+    let _xshut_l = embassy_rp::gpio::Output::new(p.PIN_2, embassy_rp::gpio::Level::Low);
+    let _xshut_r = embassy_rp::gpio::Output::new(p.PIN_3, embassy_rp::gpio::Level::Low);
+
     let mut flash =
         Flash::<_, embassy_rp::flash::Blocking, { 2 * 1024 * 1024 }>::new_blocking(p.FLASH);
 

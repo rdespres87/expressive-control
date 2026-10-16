@@ -43,15 +43,21 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 
+use core::cell::{Cell, RefCell};
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_rp::peripherals::USB;
 use embassy_rp::usb::{Driver, InterruptHandler as UsbInterruptHandler};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::channel::Channel;
 use embassy_time::Timer;
 use embassy_usb::class::midi::MidiClass;
 use embassy_usb::{Builder, Config as UsbConfig};
+use expressive_core::input::{DebouncedButton, RotaryEncoder};
+use expressive_core::rpe::{
+    self, buttons, flags, xshut, RpeIncomingPacket, RpeInputReport,
+};
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => UsbInterruptHandler<USB>;
@@ -166,7 +172,89 @@ async fn midi_sender_task(
             }
         }
 
-        let _ = sender.write_packet(&buf[..count]).await;
+        let res = sender.write_packet(&buf[..count]).await;
+        if res.is_ok() {
+            USB_CONFIGURED.lock(|cell| cell.set(true));
+        }
+    }
+}
+
+struct FrontPanelState {
+    encoder_delta: i8,
+    button_state: u8,
+    button_clicks: u8,
+    xshut_mask: u8,
+}
+
+static FRONT_PANEL: Mutex<CriticalSectionRawMutex, RefCell<FrontPanelState>> =
+    Mutex::new(RefCell::new(FrontPanelState {
+        encoder_delta: 0,
+        button_state: 0,
+        button_clicks: 0,
+        xshut_mask: 0,
+    }));
+
+static USB_CONFIGURED: Mutex<CriticalSectionRawMutex, Cell<bool>> =
+    Mutex::new(Cell::new(false));
+
+fn update_front_panel(delta: i8, state: u8, clicks: u8) {
+    FRONT_PANEL.lock(|cell| {
+        let mut fp = cell.borrow_mut();
+        fp.encoder_delta = fp.encoder_delta.saturating_add(delta);
+        fp.button_state = state;
+        fp.button_clicks |= clicks;
+    });
+}
+
+fn read_and_clear_input_report(usb_configured: bool) -> RpeInputReport {
+    FRONT_PANEL.lock(|cell| {
+        let mut fp = cell.borrow_mut();
+        let delta = fp.encoder_delta;
+        let state = fp.button_state;
+        let clicks = fp.button_clicks;
+        let xshut = fp.xshut_mask;
+
+        // Reset accumulators upon read
+        fp.encoder_delta = 0;
+        fp.button_clicks = 0;
+
+        let mut status = 0u8;
+        if usb_configured {
+            status |= flags::USB_CONFIGURED;
+        }
+        if (xshut & xshut::LEFT_TOF) != 0 {
+            status |= flags::XSHUT_LEFT_ACTIVE;
+        }
+        if (xshut & xshut::RIGHT_TOF) != 0 {
+            status |= flags::XSHUT_RIGHT_ACTIVE;
+        }
+
+        RpeInputReport {
+            encoder_delta: delta,
+            button_state: state,
+            button_clicks: clicks,
+            status_flags: status,
+        }
+    })
+}
+
+fn apply_xshut(mask: u8) {
+    FRONT_PANEL.lock(|cell| {
+        cell.borrow_mut().xshut_mask = mask;
+    });
+    let sio_set = 0xD000_0014 as *mut u32;
+    let sio_clr = 0xD000_0018 as *mut u32;
+    unsafe {
+        if (mask & xshut::LEFT_TOF) != 0 {
+            core::ptr::write_volatile(sio_set, 1 << 2);
+        } else {
+            core::ptr::write_volatile(sio_clr, 1 << 2);
+        }
+        if (mask & xshut::RIGHT_TOF) != 0 {
+            core::ptr::write_volatile(sio_set, 1 << 3);
+        } else {
+            core::ptr::write_volatile(sio_clr, 1 << 3);
+        }
     }
 }
 
@@ -197,27 +285,40 @@ fn process_i2c_command(rx: &[u8], tx: &mut [u8; 16], should_reset: &mut bool) {
     if rx.is_empty() {
         return;
     }
-    if rx.len() == 1 && rx[0] == 0x01 {
-        // CMD_GET_STATUS
-        uart_print("[I2C] CMD_GET_STATUS (0x01)\r\n");
-        let meta = unsafe { core::ptr::read_volatile(METADATA_BASE as *const AppMetadata) };
-        tx[0] = 0xA0; // State: Application running
-        tx[1] = 0x01; // Protocol v1
-        tx[2..6].copy_from_slice(&meta.size.to_be_bytes());
-        tx[6..10].copy_from_slice(&meta.crc32.to_be_bytes());
-        tx[10..14].copy_from_slice(&meta.version.to_be_bytes());
-    } else if rx.len() == 1 && rx[0] == 0xFB {
-        // CMD_ENTER_BOOTLOADER
-        uart_print("[I2C] CMD_ENTER_BOOTLOADER (0xFB) -> Soft Reset to Bootloader\r\n");
-        tx[0] = 0x06; // ACK
-        unsafe { core::ptr::write_volatile(WATCHDOG_SCRATCH0, BOOTLOADER_MAGIC) };
-        *should_reset = true;
-    } else {
-        // Process received data in 4-byte USB-MIDI packets lock-free
-        let valid_len = (rx.len() / 4) * 4;
-        for &packet in rx[..valid_len].as_chunks::<4>().0 {
-            let _ = MIDI_QUEUE.try_send(packet);
+    match rpe::classify_incoming_packet(rx) {
+        RpeIncomingPacket::StatusQuery => {
+            uart_print("[I2C] CMD_GET_STATUS (0x01)\r\n");
+            let meta = unsafe { core::ptr::read_volatile(METADATA_BASE as *const AppMetadata) };
+            tx[0] = 0xA0; // State: Application running
+            tx[1] = 0x01; // Protocol v1
+            tx[2..6].copy_from_slice(&meta.size.to_be_bytes());
+            tx[6..10].copy_from_slice(&meta.crc32.to_be_bytes());
+            tx[10..14].copy_from_slice(&meta.version.to_be_bytes());
         }
+        RpeIncomingPacket::BootApp => {
+            // Already running application
+        }
+        RpeIncomingPacket::ReadInputsRequest => {
+            let usb_ok = USB_CONFIGURED.lock(|cell| cell.get());
+            let report = read_and_clear_input_report(usb_ok);
+            tx[0..4].copy_from_slice(&report.to_bytes());
+        }
+        RpeIncomingPacket::EnterBootloader => {
+            uart_print("[I2C] CMD_ENTER_BOOTLOADER (0xFB) -> Soft Reset to Bootloader\r\n");
+            tx[0] = 0x06; // ACK
+            unsafe { core::ptr::write_volatile(WATCHDOG_SCRATCH0, BOOTLOADER_MAGIC) };
+            *should_reset = true;
+        }
+        RpeIncomingPacket::SetXshut { mask } => {
+            apply_xshut(mask);
+        }
+        RpeIncomingPacket::UsbMidi(midi_bytes) => {
+            let valid_len = (midi_bytes.len() / 4) * 4;
+            for &packet in midi_bytes[..valid_len].as_chunks::<4>().0 {
+                let _ = MIDI_QUEUE.try_send(packet);
+            }
+        }
+        RpeIncomingPacket::Unknown => {}
     }
 }
 
@@ -251,6 +352,67 @@ async fn i2c_target_task(
             uart_print("[WARN] should_reset is true! SCB::sys_reset() in 10ms...\r\n");
             Timer::after_millis(10).await;
             cortex_m::peripheral::SCB::sys_reset();
+        }
+    }
+}
+
+#[embassy_executor::task]
+async fn front_panel_task(
+    pin_enc_a: embassy_rp::gpio::Input<'static>,
+    pin_enc_b: embassy_rp::gpio::Input<'static>,
+    pin_sw: embassy_rp::gpio::Input<'static>,
+    pin_oct_up: embassy_rp::gpio::Input<'static>,
+    pin_oct_down: embassy_rp::gpio::Input<'static>,
+    pin_mute: embassy_rp::gpio::Input<'static>,
+) -> ! {
+    let mut encoder = RotaryEncoder::new();
+    let mut btn_sw = DebouncedButton::new();
+    let mut btn_oct_up = DebouncedButton::new();
+    let mut btn_oct_down = DebouncedButton::new();
+    let mut btn_mute = DebouncedButton::new();
+
+    loop {
+        Timer::after_millis(1).await;
+
+        let enc_clk = pin_enc_a.is_high();
+        let enc_dt = pin_enc_b.is_high();
+        let detent = encoder.update(enc_clk, enc_dt);
+
+        let sw_state = btn_sw.update(pin_sw.is_low());
+        let oct_up_state = btn_oct_up.update(pin_oct_up.is_low());
+        let oct_down_state = btn_oct_down.update(pin_oct_down.is_low());
+        let mute_state = btn_mute.update(pin_mute.is_low());
+
+        let mut button_mask = 0u8;
+        if sw_state.is_pressed {
+            button_mask |= buttons::ENCODER_SW;
+        }
+        if oct_up_state.is_pressed {
+            button_mask |= buttons::OCTAVE_UP;
+        }
+        if oct_down_state.is_pressed {
+            button_mask |= buttons::OCTAVE_DOWN;
+        }
+        if mute_state.is_pressed {
+            button_mask |= buttons::MUTE;
+        }
+
+        let mut clicks_mask = 0u8;
+        if sw_state.just_pressed {
+            clicks_mask |= buttons::ENCODER_SW;
+        }
+        if oct_up_state.just_pressed {
+            clicks_mask |= buttons::OCTAVE_UP;
+        }
+        if oct_down_state.just_pressed {
+            clicks_mask |= buttons::OCTAVE_DOWN;
+        }
+        if mute_state.just_pressed {
+            clicks_mask |= buttons::MUTE;
+        }
+
+        if detent != 0 || clicks_mask != 0 || button_mask != 0 {
+            update_front_panel(detent as i8, button_mask, clicks_mask);
         }
     }
 }
@@ -400,7 +562,19 @@ async fn main(spawner: Spawner) {
         i2c_config,
     );
 
-    // 5. Spawn embassy tasks
+    // 5. Initialize GPIO outputs for ToF XSHUT (GP2, GP3) - default LOW (held in reset)
+    let _xshut_l = embassy_rp::gpio::Output::new(p.PIN_2, embassy_rp::gpio::Level::Low);
+    let _xshut_r = embassy_rp::gpio::Output::new(p.PIN_3, embassy_rp::gpio::Level::Low);
+
+    // 6. Initialize GPIO inputs with pull-ups for Front Panel (GP6..GP8 for encoder, GP14, GP15, GP26 for buttons)
+    let pin_enc_a = embassy_rp::gpio::Input::new(p.PIN_6, embassy_rp::gpio::Pull::Up);
+    let pin_enc_b = embassy_rp::gpio::Input::new(p.PIN_7, embassy_rp::gpio::Pull::Up);
+    let pin_sw = embassy_rp::gpio::Input::new(p.PIN_8, embassy_rp::gpio::Pull::Up);
+    let pin_oct_up = embassy_rp::gpio::Input::new(p.PIN_14, embassy_rp::gpio::Pull::Up);
+    let pin_oct_down = embassy_rp::gpio::Input::new(p.PIN_15, embassy_rp::gpio::Pull::Up);
+    let pin_mute = embassy_rp::gpio::Input::new(p.PIN_26, embassy_rp::gpio::Pull::Up);
+
+    // 7. Spawn embassy tasks
     let _ = uart.blocking_write(b"[BOOT] Spawning midi_sender_task...\r\n");
     let _ = uart.blocking_flush();
     if spawner.spawn(midi_sender_task(midi_sender)).is_err() {
@@ -416,6 +590,25 @@ async fn main(spawner: Spawner) {
         let _ = uart.blocking_write(b"[ERR] Failed to spawn i2c_target_task\r\n");
     } else {
         let _ = uart.blocking_write(b"[OK] i2c_target_task spawned\r\n");
+    }
+    let _ = uart.blocking_flush();
+
+    let _ = uart.blocking_write(b"[BOOT] Spawning front_panel_task...\r\n");
+    let _ = uart.blocking_flush();
+    if spawner
+        .spawn(front_panel_task(
+            pin_enc_a,
+            pin_enc_b,
+            pin_sw,
+            pin_oct_up,
+            pin_oct_down,
+            pin_mute,
+        ))
+        .is_err()
+    {
+        let _ = uart.blocking_write(b"[ERR] Failed to spawn front_panel_task\r\n");
+    } else {
+        let _ = uart.blocking_write(b"[OK] front_panel_task spawned\r\n");
     }
     let _ = uart.blocking_flush();
 

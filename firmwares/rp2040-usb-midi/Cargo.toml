@@ -17,6 +17,7 @@ embassy-futures = { version = "0.1", default-features = false }
 defmt = "0.3"
 defmt-rtt = "0.4"
 heapless = { version = "0.8", default-features = false }
+expressive-core = { path = "../../core", default-features = false }
 
 [profile.release]
 debug = 2
