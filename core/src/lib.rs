@@ -3,6 +3,12 @@
 pub mod midi;
 pub use midi::{ToMidi, ToUsbMidi, UsbMidiPacket};
 
+pub mod rpe;
+pub use rpe::{RpeIncomingPacket, RpeInputReport, RPE_I2C_ADDR};
+
+pub mod input;
+pub use input::{ButtonState, DebouncedButton, RotaryEncoder};
+
 pub mod processor;
 pub mod telemetry;
 
