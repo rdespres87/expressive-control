@@ -271,8 +271,8 @@ mod tests {
                 id: 1,
                 x: 0,
                 y: 0,
-                z: 20,
-            }), // Set volume
+                z: 280,
+            }), // Set volume (Full volume = 127)
             pause(10),
             event(pitch(1000)),
             pause(20),
@@ -311,7 +311,7 @@ mod tests {
                 vec![0x90, 60, 127], // NoteOn 60, vel 127
                 vec![0xE0, 0x00, 0x40],
                 vec![0x80, 60, 0],
-                vec![0x90, 84, 127],
+                vec![0x90, 108, 127],
                 vec![0xE0, 0x00, 0x40]
             ]
         );
@@ -333,8 +333,8 @@ mod tests {
                 id: 1,
                 x: 0,
                 y: 0,
-                z: 20,
-            }), // Set volume
+                z: 280,
+            }), // Set volume (Full volume = 127)
             event(pitch(500)),
             event(pitch(400)),
         ];

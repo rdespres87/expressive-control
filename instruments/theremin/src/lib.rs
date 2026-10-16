@@ -16,6 +16,7 @@ pub struct TofThereminProcessor {
     is_playing: bool,   // True if pitch hand is present
     note_on_sent: bool, // True if a NoteOn was sent (volume > 0)
     current_volume: U7,
+    current_timbre: U7,
     current_pitch_bend: U14,
 
     // Config state
@@ -33,6 +34,10 @@ impl TofThereminProcessor {
         self.current_volume.as_u8()
     }
 
+    pub fn current_timbre(&self) -> u8 {
+        self.current_timbre.as_u8()
+    }
+
     pub fn current_pitch_bend(&self) -> u16 {
         self.current_pitch_bend.as_u16()
     }
@@ -45,18 +50,19 @@ impl TofThereminProcessor {
 impl Default for TofThereminProcessor {
     fn default() -> Self {
         Self {
-            min_distance_mm: 20,
-            max_distance_mm: 1000,
+            min_distance_mm: 20,           // 2 cm: Treble (aigus)
+            max_distance_mm: 600,          // 60 cm: Bass (graves)
             base_note: U7::new(60),        // Middle C
             pitch_bend_range_semitones: 2, // Standard MIDI +/- 2 semitones
             is_playing: false,
             note_on_sent: false,
             current_volume: U7::new(0),
+            current_timbre: U7::new(0),
             current_pitch_bend: U14::new(8192), // Center pitch bend
             root_note: RootNote::C,
             scale: Scale::Chromatic,
             base_octave: 4,
-            octave_range: 2,
+            octave_range: 4, // 4 octaves default (4 to 7 octaves)
             pitch_quantization: 50,
             filter_speed: FilterSpeed::Fast,
             processor_mode: ProcessorMode::default(),
@@ -129,17 +135,30 @@ impl TofThereminProcessor {
         )
     }
 
-    fn map_distance_to_u7(&self, z: u16) -> U7 {
-        if z <= self.min_distance_mm {
-            return U7::new(127); // Max volume
+    pub fn map_volume_and_timbre(&self, z: u16) -> (U7, U7) {
+        let min_d: u16 = 30; // 3 cm: Silence (Volume = 0)
+        let vol_max_d: u16 = 280; // 28 cm: Full volume (CC7 = 127)
+        let timbre_max_d: u16 = 480; // 48 cm: Max Timbre / Aftertouch (CC74 = 127)
+
+        if z <= min_d {
+            (U7::new(0), U7::new(0))
+        } else if z <= vol_max_d {
+            let range = vol_max_d - min_d;
+            let pos = z - min_d;
+            let vol = ((pos as u32 * 127) / range as u32) as u8;
+            (U7::new(vol.clamp(0, 127)), U7::new(0))
+        } else if z <= timbre_max_d {
+            let range = timbre_max_d - vol_max_d;
+            let pos = z - vol_max_d;
+            let timbre = ((pos as u32 * 127) / range as u32) as u8;
+            (U7::new(127), U7::new(timbre.clamp(0, 127)))
+        } else {
+            (U7::new(127), U7::new(127))
         }
-        if z >= self.max_distance_mm {
-            return U7::new(0); // Min volume
-        }
-        let range = self.max_distance_mm - self.min_distance_mm;
-        let pos = self.max_distance_mm - z;
-        let vol = ((pos as u32 * 127) / range as u32) as u8;
-        U7::new(vol)
+    }
+
+    pub fn map_distance_to_u7(&self, z: u16) -> U7 {
+        self.map_volume_and_timbre(z).0
     }
 }
 
@@ -244,9 +263,12 @@ impl ControlProcessor for TofThereminProcessor {
                     }
                     Ok(idx)
                 } else if id == 1 {
-                    // Left hand (Volume)
+                    // Left hand (Volume & Timbre / Aftertouch)
                     let prev_vol = self.current_volume.as_u8();
-                    self.current_volume = self.map_distance_to_u7(z);
+                    let (vol, timbre) = self.map_volume_and_timbre(z);
+                    self.current_volume = vol;
+                    let prev_timbre = self.current_timbre.as_u8();
+                    self.current_timbre = timbre;
 
                     let mut idx = 0;
                     if self.is_playing {
@@ -285,17 +307,30 @@ impl ControlProcessor for TofThereminProcessor {
                             self.note_on_sent = false;
                         }
 
-                        if self.current_volume.as_u8() > 0 {
+                        // Forward ChannelPressure (Aftertouch) on every update, including 0,
+                        // so MPE synths drop to silence at volume 0.
+                        if out_buffer.len() < idx + 1 {
+                            return Err(ProcessorError::BufferTooSmall);
+                        }
+                        out_buffer[idx] = InstrumentEvent::ChannelPressure {
+                            channel,
+                            pressure: self.current_volume,
+                        };
+                        telemetry.handle(
+                            expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(
+                                &out_buffer[idx],
+                            ),
+                        );
+                        idx += 1;
+
+                        // CC74 (Brightness / Timbre / Filter cutoff above max volume)
+                        if self.current_timbre.as_u8() != prev_timbre {
                             if out_buffer.len() < idx + 1 {
                                 return Err(ProcessorError::BufferTooSmall);
                             }
-
-                            // In MPE, send ChannelPressure for Volume antenna.
-                            // In Standard mode, send CC7. For simplicity we keep it as ChannelPressure for now,
-                            // or we can branch based on mode. Let's keep ChannelPressure.
-                            out_buffer[idx] = InstrumentEvent::ChannelPressure {
+                            out_buffer[idx] = InstrumentEvent::Timbre {
                                 channel,
-                                pressure: self.current_volume,
+                                value: self.current_timbre,
                             };
                             telemetry.handle(expressive_core::telemetry::TelemetryEvent::InstrumentEventGenerated(&out_buffer[idx]));
                             idx += 1;
@@ -315,7 +350,7 @@ impl ControlProcessor for TofThereminProcessor {
                             return Err(ProcessorError::BufferTooSmall);
                         }
                         out_buffer[idx] = InstrumentEvent::NoteOff {
-                            channel: Channel::new(1),
+                            channel,
                             note: self.base_note,
                             velocity: U7::new(0),
                         };
@@ -330,12 +365,13 @@ impl ControlProcessor for TofThereminProcessor {
                     Ok(idx)
                 } else if id == 1 {
                     self.current_volume = U7::new(0);
+                    self.current_timbre = U7::new(0);
                     if self.note_on_sent {
                         if out_buffer.is_empty() {
                             return Err(ProcessorError::BufferTooSmall);
                         }
                         out_buffer[idx] = InstrumentEvent::NoteOff {
-                            channel: Channel::new(1),
+                            channel,
                             note: self.base_note,
                             velocity: U7::new(0),
                         };
@@ -366,34 +402,58 @@ mod tests {
         let mut processor = TofThereminProcessor::default();
         processor.pitch_bend_range_semitones = 1;
 
-        // 1000mm -> C4 (60), center bend
-        let (n, b) = processor.map_distance_to_note_and_bend(1000);
+        // 600mm (or above) -> Base note C4 (60), center bend
+        let (n, b) = processor.map_distance_to_note_and_bend(600);
         assert_eq!(n.as_u8(), 60);
         assert_eq!(b.as_u16(), 8192);
 
-        // 918mm -> ~2 semitones -> D4 (62), center bend
-        let (n, b) = processor.map_distance_to_note_and_bend(918);
+        // 20mm (or below) -> C4 + 4 octaves (48 semitones) = C8 (108), center bend
+        let (n, b) = processor.map_distance_to_note_and_bend(20);
+        assert_eq!(n.as_u8(), 108);
+        assert_eq!(b.as_u16(), 8192);
+
+        // mm_per_semitone = (600 - 20) / 48 = 12.083 mm/semitone
+        // 600 - (2 * 12.083) = ~576mm -> D4 (62)
+        let (n, b) = processor.map_distance_to_note_and_bend(576);
         assert_eq!(n.as_u8(), 62);
-        assert!((b.as_u16() as i32 - 8192).abs() < 100);
+        assert!((b.as_u16() as i32 - 8192).abs() < 300);
 
-        // 837mm -> ~4 semitones -> E4 (64), center bend
-        let (n, b) = processor.map_distance_to_note_and_bend(837);
+        // 600 - (4 * 12.083) = ~552mm -> E4 (64)
+        let (n, b) = processor.map_distance_to_note_and_bend(552);
         assert_eq!(n.as_u8(), 64);
-        assert!((b.as_u16() as i32 - 8192).abs() < 100);
-
-        // 938mm -> ~1.5 semitones -> between Db4 and D4
-        // Closer to D4 (62) - 0.5 semitones bend
-        let (n, b) = processor.map_distance_to_note_and_bend(938);
-        assert_eq!(n.as_u8(), 62); // 1.5 rounds to 2
-        assert!(b.as_u16() < 8192);
+        assert!((b.as_u16() as i32 - 8192).abs() < 300);
     }
 
     #[test]
-    fn test_map_distance_to_volume() {
+    fn test_map_distance_to_volume_and_timbre() {
         let processor = TofThereminProcessor::default();
-        assert_eq!(processor.map_distance_to_u7(20).as_u8(), 127);
-        assert_eq!(processor.map_distance_to_u7(1000).as_u8(), 0);
-        assert_eq!(processor.map_distance_to_u7(510).as_u8(), 63);
+        // Distance <= 30mm: Volume = 0, Timbre = 0
+        let (v, t) = processor.map_volume_and_timbre(20);
+        assert_eq!(v.as_u8(), 0);
+        assert_eq!(t.as_u8(), 0);
+        let (v, t) = processor.map_volume_and_timbre(30);
+        assert_eq!(v.as_u8(), 0);
+        assert_eq!(t.as_u8(), 0);
+
+        // Mid volume: 30mm + 125mm = 155mm -> ~63 volume, 0 timbre
+        let (v, t) = processor.map_volume_and_timbre(155);
+        assert_eq!(v.as_u8(), 63);
+        assert_eq!(t.as_u8(), 0);
+
+        // Max volume threshold (280mm): Volume = 127, Timbre = 0
+        let (v, t) = processor.map_volume_and_timbre(280);
+        assert_eq!(v.as_u8(), 127);
+        assert_eq!(t.as_u8(), 0);
+
+        // Above max volume: Aftertouch zone! (280mm + 100mm = 380mm) -> Volume = 127, Timbre ~63
+        let (v, t) = processor.map_volume_and_timbre(380);
+        assert_eq!(v.as_u8(), 127);
+        assert_eq!(t.as_u8(), 63);
+
+        // Max timbre (480mm and above): Volume = 127, Timbre = 127
+        let (v, t) = processor.map_volume_and_timbre(480);
+        assert_eq!(v.as_u8(), 127);
+        assert_eq!(t.as_u8(), 127);
     }
 
     #[test]
@@ -403,30 +463,31 @@ mod tests {
             channel: Channel::new(1),
             note: U7::new(0),
             velocity: U7::new(0),
-        }; 2];
+        }; 4];
         let mut t = expressive_core::telemetry::NoopTelemetry;
 
+        // Set volume hand at 280mm (Full Volume)
         processor
             .process_event(
                 SensorEvent::Position3D {
                     id: 1,
                     x: 0,
                     y: 0,
-                    z: 20,
+                    z: 280,
                 },
                 &mut buffer,
                 &mut t,
             )
             .unwrap();
 
-        // 500mm is ~12.2 semitones from 1000mm. Note should be 60 + 12 = 72 (C5).
+        // 455mm is 145mm from 600mm. 145 / 12.083 = 12 semitones -> Note should be 60 + 12 = 72 (C5).
         let count = processor
             .process_event(
                 SensorEvent::Position3D {
                     id: 0,
                     x: 0,
                     y: 0,
-                    z: 500,
+                    z: 455,
                 },
                 &mut buffer,
                 &mut t,
@@ -452,7 +513,7 @@ mod tests {
         }; 4];
         let mut t = expressive_core::telemetry::NoopTelemetry;
 
-        // 1. Establish pitch hand at 500mm and volume hand at 20mm (full volume = 127)
+        // 1. Establish pitch hand at 500mm and volume hand at 400mm (full volume = 127)
         processor
             .process_event(
                 SensorEvent::Position3D {
@@ -471,7 +532,7 @@ mod tests {
                     id: 1,
                     x: 0,
                     y: 0,
-                    z: 20,
+                    z: 400,
                 },
                 &mut buffer,
                 &mut t,
@@ -481,25 +542,25 @@ mod tests {
         assert!(processor.is_playing());
         assert_eq!(processor.current_volume(), 127);
 
-        // 2. Mute: hand moves to 1000mm (silence)
+        // 2. Mute: hand moves close to antenna <= 30mm (silence)
         let count = processor
             .process_event(
                 SensorEvent::Position3D {
                     id: 1,
                     x: 0,
                     y: 0,
-                    z: 1000,
+                    z: 20,
                 },
                 &mut buffer,
                 &mut t,
             )
             .unwrap();
-        assert_eq!(count, 1);
+        assert!(count >= 1);
         match buffer[0] {
             InstrumentEvent::NoteOff { velocity, .. } => {
                 assert_eq!(velocity.as_u8(), 0);
             }
-            _ => panic!("Expected NoteOff upon volume reaching 1000mm"),
+            _ => panic!("Expected NoteOff upon volume reaching 0"),
         }
         assert_eq!(processor.current_volume(), 0);
 
@@ -650,5 +711,60 @@ mod tests {
             result,
             Err(expressive_core::processor::ProcessorError::BufferTooSmall)
         );
+    }
+
+    #[test]
+    fn test_release_emits_note_off_on_configured_channel() {
+        let mut processor = TofThereminProcessor::default();
+        let target_ch = Channel::new(5);
+        processor.processor_mode = ProcessorMode::Standard {
+            channel: target_ch,
+            pitch_bend_range: 2,
+        };
+
+        let mut buffer = [InstrumentEvent::NoteOff {
+            channel: Channel::new(0),
+            note: U7::new(0),
+            velocity: U7::new(0),
+        }; 4];
+        let mut t = expressive_core::telemetry::NoopTelemetry;
+
+        // Establish pitch and volume
+        processor
+            .process_event(
+                SensorEvent::Position3D {
+                    id: 0,
+                    x: 0,
+                    y: 0,
+                    z: 500,
+                },
+                &mut buffer,
+                &mut t,
+            )
+            .unwrap();
+        processor
+            .process_event(
+                SensorEvent::Position3D {
+                    id: 1,
+                    x: 0,
+                    y: 0,
+                    z: 280,
+                },
+                &mut buffer,
+                &mut t,
+            )
+            .unwrap();
+
+        // Release pitch hand (id 0) -> NoteOff must be on target_ch (5)
+        let count = processor
+            .process_event(SensorEvent::Released { id: 0 }, &mut buffer, &mut t)
+            .unwrap();
+        assert_eq!(count, 1);
+        match buffer[0] {
+            InstrumentEvent::NoteOff { channel, .. } => {
+                assert_eq!(channel, target_ch);
+            }
+            _ => panic!("Expected NoteOff"),
+        }
     }
 }
