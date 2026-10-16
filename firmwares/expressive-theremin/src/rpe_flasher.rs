@@ -90,7 +90,14 @@ pub fn check_and_update_rp2040(driver: &mut I2cDriver<'_>) -> Result<bool, Flash
 
     if state == 0xA0 && active_crc == expected_crc {
         log::info!("[RPE Flasher] RP2040 firmware is up to date. No update needed.");
-        return Ok(false);
+        return Ok(true);
+    }
+
+    if state == 0xB0 && active_crc == expected_crc {
+        log::info!("[RPE Flasher] RP2040 bootloader detected with up-to-date app. Commanding boot...");
+        let boot_cmd = [cmd::BOOT_APP];
+        let _ = driver.write(RP2040_I2C_ADDR, &boot_cmd, 50);
+        return Ok(true);
     }
 
     // If application is running but outdated, request reboot into bootloader
@@ -102,12 +109,20 @@ pub fn check_and_update_rp2040(driver: &mut I2cDriver<'_>) -> Result<bool, Flash
         );
         let reboot_cmd = [cmd::ENTER_BOOTLOADER];
         let _ = driver.write(RP2040_I2C_ADDR, &reboot_cmd, 50);
-        FreeRtos::delay_ms(200); // Allow RP2040 time to reboot and re-arm I2C target
+        FreeRtos::delay_ms(300); // Allow RP2040 time to reboot and re-arm I2C target
 
-        // Re-query status
-        if driver.write(RP2040_I2C_ADDR, &query, 50).is_err()
-            || driver.read(RP2040_I2C_ADDR, &mut status_buf, 50).is_err()
-        {
+        // Re-query status with retries (up to 10 retries @ 100ms)
+        let mut reboot_ok = false;
+        for _ in 0..10 {
+            FreeRtos::delay_ms(100);
+            if driver.write(RP2040_I2C_ADDR, &query, 50).is_ok()
+                && driver.read(RP2040_I2C_ADDR, &mut status_buf, 50).is_ok()
+            {
+                reboot_ok = true;
+                break;
+            }
+        }
+        if !reboot_ok {
             return Err(FlasherError::ProtocolError("RP2040 failed to respond after reboot into bootloader"));
         }
         state = status_buf[0];

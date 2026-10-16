@@ -41,7 +41,7 @@ fn main() {
     let phentsize = u16::from_le_bytes(elf[42..44].try_into().expect("ELF phentsize")) as usize;
     let phnum = u16::from_le_bytes(elf[44..46].try_into().expect("ELF phnum")) as usize;
 
-    let base_addr = 0x1000_4000u32;
+    let base_addr = 0x1000_8000u32;
     let mut raw_bin = Vec::new();
 
     for i in 0..phnum {

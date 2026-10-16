@@ -14,7 +14,7 @@ use esp_idf_svc::sys::EspError;
 use expressive_core::processor::{
     ConfigMessage, ControlProcessor, FilterSpeed, ProcessorMode, RootNote, Scale,
 };
-use expressive_core::{Channel, InstrumentEvent, SensorEvent, U7};
+use expressive_core::{Channel, InstrumentEvent, SensorEvent, U7, UsbMidiPacket};
 use theremin::TofThereminProcessor;
 
 // Slint UI is always compiled.
@@ -31,6 +31,7 @@ pub mod navigation;
 pub mod platform;
 pub mod protocol;
 pub mod rpe_flasher;
+pub mod simulation;
 pub mod touch;
 
 #[inline]
@@ -1003,19 +1004,54 @@ fn core1_sensor_dsp_task(
     );
     let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::HardwareStatus(hw_connected));
 
-    // Check RP2040 USB-MIDI coprocessor firmware and update over I2C if required
+    // Scan I2C bus to discover all attached devices
     if let Some(ref bus_ref) = i2c_bus {
         if let Ok(mut driver) = bus_ref.try_borrow_mut() {
+            log::info!("[I2C Scan] Starting bus scan on SDA=GPIO19, SCL=GPIO20 (0x08..=0x77)...");
+            let mut found_count = 0;
+            for addr in 0x08..=0x77u8 {
+                if driver.write(addr, &[], 10).is_ok() {
+                    log::info!("[I2C Scan] -> Device detected at address 0x{:02X}", addr);
+                    found_count += 1;
+                }
+            }
+            log::info!("[I2C Scan] Bus scan completed. Total devices found: {}", found_count);
             let _ = rpe_flasher::check_and_update_rp2040(&mut driver);
         }
     }
 
+    let mut rpe_ready = false;
     let mut processor = TofThereminProcessor::default();
     let mut step: u32 = 0;
     let mut last_touch: Option<(u16, u16)> = None;
     let mut is_muted: bool = false;
+    let mut last_sent_vol: u8 = 0xFF;
+    let mut rpe_consecutive_errors: u8 = 0;
 
     loop {
+        // Hot-plug detection: If RP2040 coprocessor was not connected at boot or disconnected during runtime
+        if !rpe_ready && step % 50 == 0 {
+            if let Some(ref bus_ref) = i2c_bus {
+                if let Ok(mut driver) = bus_ref.try_borrow_mut() {
+                    let probe = [rpe_flasher::cmd::GET_STATUS];
+                    if driver.write(rpe_flasher::RP2040_I2C_ADDR, &probe, 10).is_ok() {
+                        match rpe_flasher::check_and_update_rp2040(&mut driver) {
+                            Ok(ok) => {
+                                if ok {
+                                    rpe_ready = true;
+                                    rpe_consecutive_errors = 0;
+                                    log::info!("[RPE] Coprocessor re-connected and ready!");
+                                }
+                            }
+                            Err(e) => {
+                                log::debug!("[RPE] Recovery probe error: {:?}", e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // 1. Drain pending UI configuration messages lock-free
         while let Some(msg) = config_rx.dequeue() {
             processor.handle_config(msg);
@@ -1094,9 +1130,7 @@ fn core1_sensor_dsp_task(
         }
 
         // 4. Sensor measurement (Live VL53L4CD or Synthetic Simulation Fallback)
-        let angle = (step as f32) * 0.015;
-        let sim_pitch_z = (525.0 + 380.0 * angle.sin()) as u16; // 145mm .. 905mm
-        let sim_vol_z = (200.0 + 120.0 * ((step as f32) * 0.025).cos()) as u16; // 80mm .. 320mm
+        let (sim_pitch_z, sim_vol_z) = simulation::compute_rainbow_simulation(step);
 
         let (pitch_z, vol_z) = if let (Some(ref mut p_sensor), Some(ref mut v_sensor)) =
             (tof_pitch_opt.as_mut(), tof_vol_opt.as_mut())
@@ -1142,12 +1176,24 @@ fn core1_sensor_dsp_task(
             )
             .unwrap_or(0);
 
-        if n_pitch > 0 {
+        if n_pitch > 0 && rpe_ready {
             if let Some(ref bus_ref) = i2c_bus {
                 if let Ok(mut driver) = bus_ref.try_borrow_mut() {
+                    let mut write_err = false;
                     for ev in &events[..n_pitch] {
                         let packet = expressive_core::ToUsbMidi::to_usb_midi(ev, 0);
-                        let _ = driver.write(RP2040_MIDI_I2C_ADDR, packet.as_bytes(), 5);
+                        if driver.write(RP2040_MIDI_I2C_ADDR, packet.as_bytes(), 5).is_err() {
+                            write_err = true;
+                        }
+                    }
+                    if write_err {
+                        rpe_consecutive_errors = rpe_consecutive_errors.saturating_add(1);
+                        if rpe_consecutive_errors >= 3 {
+                            rpe_ready = false;
+                            log::warn!("[RPE] Coprocessor disconnected or in reset (pitch write failed)");
+                        }
+                    } else {
+                        rpe_consecutive_errors = 0;
                     }
                 }
             }
@@ -1167,12 +1213,37 @@ fn core1_sensor_dsp_task(
             )
             .unwrap_or(0);
 
-        if n_vol > 0 {
+        if n_vol > 0 && rpe_ready {
             if let Some(ref bus_ref) = i2c_bus {
                 if let Ok(mut driver) = bus_ref.try_borrow_mut() {
+                    let mut write_err = false;
                     for ev in &events[..n_vol] {
                         let packet = expressive_core::ToUsbMidi::to_usb_midi(ev, 0);
-                        let _ = driver.write(RP2040_MIDI_I2C_ADDR, packet.as_bytes(), 5);
+                        if driver.write(RP2040_MIDI_I2C_ADDR, packet.as_bytes(), 5).is_err() {
+                            write_err = true;
+                        }
+                    }
+                    // Also forward CC7 (Volume) and CC11 (Expression) so all synth patches track volume dynamics
+                    let vol_u7 = processor.current_volume();
+                    if vol_u7 != last_sent_vol {
+                        let cc7 = UsbMidiPacket::from_midi(0, 0xB0, 7, vol_u7);
+                        if driver.write(RP2040_MIDI_I2C_ADDR, cc7.as_bytes(), 5).is_err() {
+                            write_err = true;
+                        }
+                        let cc11 = UsbMidiPacket::from_midi(0, 0xB0, 11, vol_u7);
+                        if driver.write(RP2040_MIDI_I2C_ADDR, cc11.as_bytes(), 5).is_err() {
+                            write_err = true;
+                        }
+                        last_sent_vol = vol_u7;
+                    }
+                    if write_err {
+                        rpe_consecutive_errors = rpe_consecutive_errors.saturating_add(1);
+                        if rpe_consecutive_errors >= 3 {
+                            rpe_ready = false;
+                            log::warn!("[RPE] Coprocessor disconnected or in reset (volume write failed)");
+                        }
+                    } else {
+                        rpe_consecutive_errors = 0;
                     }
                 }
             }
@@ -1202,7 +1273,7 @@ fn core1_sensor_dsp_task(
         let octave = (display_note / 12) - 1;
         let freq =
             440.0 * (2.0f32).powf((display_note as f32 - 69.0 + display_cents / 100.0) / 12.0);
-        let expression = 0.50 + 0.30 * ((step as f32) * 0.04).sin();
+        let expression = vol_norm;
 
         // 5. Publish wait-free snapshot for the UI thread
         snapshot.write(concurrency::TunerSnapshot {
