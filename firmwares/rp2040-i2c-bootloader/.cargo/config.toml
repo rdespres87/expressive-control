@@ -4,6 +4,8 @@ rustflags = [
     "-C", "link-arg=-Tlink.x",
     "-C", "link-arg=-Tlink-rp.x",
     "-C", "link-arg=-Tdefmt.x",
+    "-C", "link-arg=--undefined=I2C0_IRQ",
+    "-C", "link-arg=--undefined=TIMER_IRQ_0",
 ]
 
 [build]
