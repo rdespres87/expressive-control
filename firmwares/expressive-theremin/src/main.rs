@@ -31,6 +31,7 @@ pub mod navigation;
 pub mod platform;
 pub mod protocol;
 pub mod rpe_flasher;
+pub mod rpe_front_panel;
 pub mod simulation;
 pub mod touch;
 
@@ -305,12 +306,14 @@ async fn start_ranging(sensor: &mut Sensor<'_>, name: &'static str) -> Result<()
 
 /// Reads the measurement signalled by the interrupt line, then re-arms the interrupt.
 /// The interrupt is always cleared, even if the read failed, to avoid a stuck line.
-async fn read_pending_distance(sensor: &mut Sensor<'_>) -> Result<u16, FirmwareError> {
-    let measurement = sensor.read_measurement().await;
-    let cleared = sensor.clear_interrupt().await;
-    let measurement = measurement.context("pitch measurement read")?;
-    cleared.context("pitch interrupt clear")?;
-    Ok(measurement.distance)
+async fn read_pending_distance(sensor: &mut Sensor<'_>) -> Result<Option<(u16, vl53l4cd::Status)>, FirmwareError> {
+    if sensor.has_measurement().await.context("check has_measurement")? {
+        let measurement = sensor.read_measurement().await.context("sensor measurement read")?;
+        let _ = sensor.clear_interrupt().await;
+        Ok(Some((measurement.distance, measurement.status)))
+    } else {
+        Ok(None)
+    }
 }
 
 // --- Thread 1: UI Thread ---
@@ -901,10 +904,10 @@ fn core1_sensor_dsp_task(
 
     let i2c_bus = i2c_driver_opt.map(RefCell::new);
     let mut gt911_opt = None;
-    let mut front_panel_opt = None;
     let mut tof_vol_opt = None;
     let mut tof_pitch_opt = None;
     let mut hw_connected = false;
+    let mut rpe_ready = false;
 
     if let Some(ref bus) = i2c_bus {
         // 1. Touchscreen GT911
@@ -920,82 +923,64 @@ fn core1_sensor_dsp_task(
             }
         }
 
-        // 2. Front Panel MCP23017
-        let mut fp = front_panel::ThereminFrontPanel::default();
-        let mut fp_ok = false;
+        // 2. Initialize and handshake RP2040 Coprocessor ("RPE")
         if let Ok(mut driver) = bus.try_borrow_mut() {
-            match fp.init(&mut driver) {
-                Ok(()) => {
-                    log::info!("[Core 1] MCP23017 front panel initialized");
-                    fp_ok = true;
+            match rpe_flasher::check_and_update_rp2040(&mut driver) {
+                Ok(ready) => {
+                    rpe_ready = ready;
+                    log::info!("[Core 1] RP2040 Coprocessor ready: {}", ready);
                 }
                 Err(e) => {
-                    log::warn!(
-                        "[Core 1] MCP23017 front panel init failed (hardware absent?): {:?}",
-                        e
-                    );
+                    log::warn!("[Core 1] RP2040 Coprocessor probe failed: {:?}", e);
                 }
             }
         }
 
-        // 3. ToF sensors sequential boot via MCP23017 XSHUT lines
-        if fp_ok {
-            // Sequential boot: Volume sensor (Left)
-            let vol_boot = if let Ok(mut driver) = bus.try_borrow_mut() {
-                fp.tof_controller
-                    .release_left(&mut fp.expander, &mut driver)
-                    .is_ok()
-            } else {
-                false
-            };
-
-            if vol_boot {
-                FreeRtos::delay_ms(5);
-                match block_on(init_and_readdress(bus, VOLUME_SENSOR_ADDR)) {
-                    Ok(mut s) => {
-                        if block_on(start_ranging(&mut s, "volume sensor")).is_ok() {
-                            log::info!(
-                                "[Core 1] Left (Volume) ToF sensor initialized at 0x{:02X}",
-                                VOLUME_SENSOR_ADDR
-                            );
-                            tof_vol_opt = Some(s);
-                        }
-                    }
-                    Err(e) => log::warn!("[Core 1] Failed to init Left ToF sensor: {:?}", e),
-                }
+        // 3. ToF sensors sequential boot via RP2040 XSHUT lines (GP2, GP3)
+        if rpe_ready {
+            if let Ok(mut driver) = bus.try_borrow_mut() {
+                // Hold both in reset
+                let _ = rpe_front_panel::set_tof_xshut(&mut driver, expressive_core::rpe::xshut::NONE);
+                FreeRtos::delay_ms(25);
+                // Wake Left ToF (Volume)
+                let _ = rpe_front_panel::set_tof_xshut(&mut driver, expressive_core::rpe::xshut::LEFT_TOF);
+                FreeRtos::delay_ms(25);
             }
 
-            // Sequential boot: Pitch sensor (Right)
-            let pitch_boot = if let Ok(mut driver) = bus.try_borrow_mut() {
-                fp.tof_controller
-                    .release_right(&mut fp.expander, &mut driver)
-                    .is_ok()
-            } else {
-                false
-            };
-
-            if pitch_boot {
-                FreeRtos::delay_ms(5);
-                match block_on(init_and_readdress(bus, PITCH_SENSOR_ADDR)) {
-                    Ok(mut s) => {
-                        if block_on(start_ranging(&mut s, "pitch sensor")).is_ok() {
-                            log::info!(
-                                "[Core 1] Right (Pitch) ToF sensor initialized at 0x{:02X}",
-                                PITCH_SENSOR_ADDR
-                            );
-                            tof_pitch_opt = Some(s);
-                        }
+            match block_on(init_and_readdress(bus, VOLUME_SENSOR_ADDR)) {
+                Ok(mut s) => {
+                    if block_on(start_ranging(&mut s, "volume sensor")).is_ok() {
+                        log::info!(
+                            "[Core 1] Left (Volume) ToF sensor initialized at 0x{:02X}",
+                            VOLUME_SENSOR_ADDR
+                        );
+                        tof_vol_opt = Some(s);
                     }
-                    Err(e) => log::warn!("[Core 1] Failed to init Right ToF sensor: {:?}", e),
                 }
+                Err(e) => log::warn!("[Core 1] Failed to init Left ToF sensor: {:?}", e),
             }
 
-            front_panel_opt = Some(fp);
+            if let Ok(mut driver) = bus.try_borrow_mut() {
+                // Wake Right ToF (Pitch) as well -> Both awake now
+                let _ = rpe_front_panel::set_tof_xshut(&mut driver, expressive_core::rpe::xshut::BOTH);
+                FreeRtos::delay_ms(25);
+            }
+
+            match block_on(init_and_readdress(bus, PITCH_SENSOR_ADDR)) {
+                Ok(mut s) => {
+                    if block_on(start_ranging(&mut s, "pitch sensor")).is_ok() {
+                        log::info!(
+                            "[Core 1] Right (Pitch) ToF sensor initialized at 0x{:02X}",
+                            PITCH_SENSOR_ADDR
+                        );
+                        tof_pitch_opt = Some(s);
+                    }
+                }
+                Err(e) => log::warn!("[Core 1] Failed to init Right ToF sensor: {:?}", e),
+            }
         }
 
-        hw_connected = front_panel_opt.is_some()
-            || tof_vol_opt.is_some()
-            || tof_pitch_opt.is_some();
+        hw_connected = rpe_ready || tof_vol_opt.is_some() || tof_pitch_opt.is_some();
     }
 
     log::info!(
@@ -1016,17 +1001,19 @@ fn core1_sensor_dsp_task(
                 }
             }
             log::info!("[I2C Scan] Bus scan completed. Total devices found: {}", found_count);
-            let _ = rpe_flasher::check_and_update_rp2040(&mut driver);
         }
     }
-
-    let mut rpe_ready = false;
     let mut processor = TofThereminProcessor::default();
     let mut step: u32 = 0;
     let mut last_touch: Option<(u16, u16)> = None;
     let mut is_muted: bool = false;
     let mut last_sent_vol: u8 = 0xFF;
+    let mut last_sent_timbre: u8 = 0xFF;
     let mut rpe_consecutive_errors: u8 = 0;
+    let mut last_live_pitch: Option<u16> = None;
+    let mut last_live_vol: Option<u16> = None;
+    let mut consecutive_pitch_misses: u8 = 0;
+    let mut consecutive_vol_misses: u8 = 0;
 
     loop {
         // Hot-plug detection: If RP2040 coprocessor was not connected at boot or disconnected during runtime
@@ -1102,79 +1089,163 @@ fn core1_sensor_dsp_task(
             }
         }
 
-        // 3. Poll Front Panel (Buttons & Rotary Encoder)
-        if let (Some(fp), Some(bus_ref)) = (front_panel_opt.as_mut(), i2c_bus.as_ref()) {
-            if let Ok(mut driver) = bus_ref.try_borrow_mut() {
-                if let Ok(event) = fp.update(&mut driver) {
-                    if event.encoder_delta != 0 {
-                        let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::EncoderDelta(
-                            event.encoder_delta as i8,
-                        ));
-                    }
-                    if event.just_encoder_switch {
-                        let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::EncoderClick);
-                    }
-                    if event.just_octave_up {
-                        let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::OctaveUp);
-                    }
-                    if event.just_octave_down {
-                        let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::OctaveDown);
-                    }
-                    if event.just_mute {
-                        is_muted = !is_muted;
-                        let _ =
-                            ui_input_tx.enqueue(concurrency::UiInputEvent::MuteToggled(is_muted));
+        // 3. Poll Front Panel via RP2040 Coprocessor (Buttons & Rotary Encoder)
+        if rpe_ready {
+            if let Some(ref bus_ref) = i2c_bus {
+                if let Ok(mut driver) = bus_ref.try_borrow_mut() {
+                    if let Ok(report) = rpe_front_panel::read_input_report(&mut driver) {
+                        if report.encoder_delta != 0 {
+                            let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::EncoderDelta(
+                                report.encoder_delta,
+                            ));
+                        }
+                        if report.has_button_clicked(expressive_core::rpe::buttons::ENCODER_SW) {
+                            let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::EncoderClick);
+                        }
+                        if report.has_button_clicked(expressive_core::rpe::buttons::OCTAVE_UP) {
+                            let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::OctaveUp);
+                        }
+                        if report.has_button_clicked(expressive_core::rpe::buttons::OCTAVE_DOWN) {
+                            let _ = ui_input_tx.enqueue(concurrency::UiInputEvent::OctaveDown);
+                        }
+                        if report.has_button_clicked(expressive_core::rpe::buttons::MUTE) {
+                            is_muted = !is_muted;
+                            let _ =
+                                ui_input_tx.enqueue(concurrency::UiInputEvent::MuteToggled(is_muted));
+                        }
                     }
                 }
             }
         }
 
-        // 4. Sensor measurement (Live VL53L4CD or Synthetic Simulation Fallback)
+        // 4. Sensor measurement (Live VL53L4CD per-sensor with Synthetic Simulation Fallback)
         let (sim_pitch_z, sim_vol_z) = simulation::compute_rainbow_simulation(step);
 
-        let (pitch_z, vol_z) = if let (Some(ref mut p_sensor), Some(ref mut v_sensor)) =
-            (tof_pitch_opt.as_mut(), tof_vol_opt.as_mut())
-        {
-            let p = match block_on(read_pending_distance(p_sensor)) {
-                Ok(d) => d,
+        let (pitch_z_opt, is_pitch_present) = if let Some(ref mut p_sensor) = tof_pitch_opt.as_mut() {
+            match block_on(read_pending_distance(p_sensor)) {
+                Ok(Some((d, status))) => {
+                    if step % 50 == 0 {
+                        log::info!("[ToF Right Raw] dist={} mm, status={:?}", d, status);
+                    }
+                    if status == vl53l4cd::Status::Valid && d >= 15 && d <= 800 {
+                        consecutive_pitch_misses = 0;
+                        last_live_pitch = Some(d);
+                        (Some(d), true)
+                    } else {
+                        consecutive_pitch_misses = consecutive_pitch_misses.saturating_add(1);
+                        if consecutive_pitch_misses >= 5 {
+                            last_live_pitch = None;
+                            (None, false)
+                        } else {
+                            (last_live_pitch, last_live_pitch.is_some())
+                        }
+                    }
+                }
+                Ok(None) => (last_live_pitch, last_live_pitch.is_some()),
                 Err(e) => {
                     log::debug!("[ToF] Pitch read failed: {:?}", e);
-                    sim_pitch_z
+                    consecutive_pitch_misses = consecutive_pitch_misses.saturating_add(1);
+                    if consecutive_pitch_misses >= 5 {
+                        last_live_pitch = None;
+                        (None, false)
+                    } else {
+                        (last_live_pitch, last_live_pitch.is_some())
+                    }
                 }
-            };
-            let v = match block_on(read_pending_distance(v_sensor)) {
-                Ok(d) => d,
+            }
+        } else {
+            (Some(sim_pitch_z), true)
+        };
+
+        let vol_z = if let Some(ref mut v_sensor) = tof_vol_opt.as_mut() {
+            match block_on(read_pending_distance(v_sensor)) {
+                Ok(Some((d, status))) => {
+                    if step % 50 == 0 {
+                        log::info!("[ToF Left Raw] dist={} mm, status={:?}", d, status);
+                    }
+                    if status == vl53l4cd::Status::Valid && d >= 15 && d <= 800 {
+                        consecutive_vol_misses = 0;
+                        last_live_vol = Some(d);
+                    } else {
+                        consecutive_vol_misses = consecutive_vol_misses.saturating_add(1);
+                        if consecutive_vol_misses >= 5 {
+                            last_live_vol = None;
+                        }
+                    }
+                    last_live_vol.unwrap_or(0)
+                }
+                Ok(None) => last_live_vol.unwrap_or(0),
                 Err(e) => {
                     log::debug!("[ToF] Volume read failed: {:?}", e);
-                    sim_vol_z
+                    consecutive_vol_misses = consecutive_vol_misses.saturating_add(1);
+                    if consecutive_vol_misses >= 5 {
+                        last_live_vol = None;
+                    }
+                    last_live_vol.unwrap_or(0)
                 }
-            };
-            (p, v)
+            }
         } else {
-            (sim_pitch_z, sim_vol_z)
+            sim_vol_z
         };
+
+        if step % 50 == 0 {
+            match (last_live_vol, last_live_pitch) {
+                (Some(v), Some(p)) => {
+                    log::info!("[ToF Monitor] Volume (Left): {} mm | Pitch (Right): {} mm", v, p);
+                }
+                (Some(v), None) => {
+                    log::info!("[ToF Monitor] Volume (Left): {} mm | Pitch (Right): [No Hand Detected]", v);
+                }
+                (None, Some(p)) => {
+                    log::info!("[ToF Monitor] Volume (Left): [Silence/No Hand] | Pitch (Right): {} mm", p);
+                }
+                (None, None) => {
+                    if tof_pitch_opt.is_none() && tof_vol_opt.is_none() {
+                        log::info!("[ToF Monitor] [Simulation Active for both sensors]");
+                    } else {
+                        log::info!("[ToF Monitor] Both sensors idle (no hands detected)");
+                    }
+                }
+            }
+        }
 
         let mut events = [InstrumentEvent::NoteOff {
             channel: Channel::new(0),
             note: U7::new(0),
             velocity: U7::new(0),
-        }; 4];
+        }; 8];
         struct NullTelemetry;
         impl expressive_core::telemetry::TelemetryHandler for NullTelemetry {
             fn handle(&mut self, _event: expressive_core::telemetry::TelemetryEvent) {}
         }
-        let n_pitch = processor
-            .process_event(
-                SensorEvent::Position3D {
-                    id: 0,
-                    x: 0,
-                    y: 0,
-                    z: pitch_z,
-                },
-                &mut events,
-                &mut NullTelemetry,
-            )
-            .unwrap_or(0);
+        let n_pitch = if is_pitch_present {
+            if let Some(pz) = pitch_z_opt {
+                processor
+                    .process_event(
+                        SensorEvent::Position3D {
+                            id: 0,
+                            x: 0,
+                            y: 0,
+                            z: pz,
+                        },
+                        &mut events,
+                        &mut NullTelemetry,
+                    )
+                    .unwrap_or(0)
+            } else {
+                0
+            }
+        } else if processor.is_playing() {
+            processor
+                .process_event(
+                    SensorEvent::Released { id: 0 },
+                    &mut events,
+                    &mut NullTelemetry,
+                )
+                .unwrap_or(0)
+        } else {
+            0
+        };
 
         if n_pitch > 0 && rpe_ready {
             if let Some(ref bus_ref) = i2c_bus {
@@ -1199,7 +1270,7 @@ fn core1_sensor_dsp_task(
             }
         }
 
-        let effective_vol_z = if is_muted { 1000 } else { vol_z };
+        let effective_vol_z = if is_muted { 0 } else { vol_z };
         let n_vol = processor
             .process_event(
                 SensorEvent::Position3D {
@@ -1223,19 +1294,64 @@ fn core1_sensor_dsp_task(
                             write_err = true;
                         }
                     }
-                    // Also forward CC7 (Volume) and CC11 (Expression) so all synth patches track volume dynamics
+                    // Forward CC7 (Volume), CC11 (Expression), and CC74 (Timbre)
                     let vol_u7 = processor.current_volume();
+                    let timbre_u7 = processor.current_timbre();
+
                     if vol_u7 != last_sent_vol {
-                        let cc7 = UsbMidiPacket::from_midi(0, 0xB0, 7, vol_u7);
-                        if driver.write(RP2040_MIDI_I2C_ADDR, cc7.as_bytes(), 5).is_err() {
+                        // Forward on both Master channel (0xB0) and MPE Voice channel 2 (0xB1)
+                        let cc7_ch1 = UsbMidiPacket::from_midi(0, 0xB0, 7, vol_u7);
+                        let cc7_ch2 = UsbMidiPacket::from_midi(0, 0xB1, 7, vol_u7);
+                        if driver.write(RP2040_MIDI_I2C_ADDR, cc7_ch1.as_bytes(), 5).is_err() {
                             write_err = true;
                         }
-                        let cc11 = UsbMidiPacket::from_midi(0, 0xB0, 11, vol_u7);
-                        if driver.write(RP2040_MIDI_I2C_ADDR, cc11.as_bytes(), 5).is_err() {
+                        if driver.write(RP2040_MIDI_I2C_ADDR, cc7_ch2.as_bytes(), 5).is_err() {
                             write_err = true;
+                        }
+
+                        // If volume reaches 0, immediately send All Sound Off (CC 120 = 0) and All Notes Off (CC 123 = 0)
+                        if vol_u7 == 0 {
+                            let sound_off_ch1 = UsbMidiPacket::from_midi(0, 0xB0, 120, 0);
+                            let sound_off_ch2 = UsbMidiPacket::from_midi(0, 0xB1, 120, 0);
+                            let notes_off_ch1 = UsbMidiPacket::from_midi(0, 0xB0, 123, 0);
+                            let notes_off_ch2 = UsbMidiPacket::from_midi(0, 0xB1, 123, 0);
+                            if driver.write(RP2040_MIDI_I2C_ADDR, sound_off_ch1.as_bytes(), 5).is_err() {
+                                write_err = true;
+                            }
+                            if driver.write(RP2040_MIDI_I2C_ADDR, sound_off_ch2.as_bytes(), 5).is_err() {
+                                write_err = true;
+                            }
+                            if driver.write(RP2040_MIDI_I2C_ADDR, notes_off_ch1.as_bytes(), 5).is_err() {
+                                write_err = true;
+                            }
+                            if driver.write(RP2040_MIDI_I2C_ADDR, notes_off_ch2.as_bytes(), 5).is_err() {
+                                write_err = true;
+                            }
                         }
                         last_sent_vol = vol_u7;
                     }
+
+                    if timbre_u7 != last_sent_timbre {
+                        // Forward CC74 (Timbre) and CC11 (Expression)
+                        let cc74_ch1 = UsbMidiPacket::from_midi(0, 0xB0, 74, timbre_u7);
+                        let cc74_ch2 = UsbMidiPacket::from_midi(0, 0xB1, 74, timbre_u7);
+                        let cc11_ch1 = UsbMidiPacket::from_midi(0, 0xB0, 11, timbre_u7);
+                        let cc11_ch2 = UsbMidiPacket::from_midi(0, 0xB1, 11, timbre_u7);
+                        if driver.write(RP2040_MIDI_I2C_ADDR, cc74_ch1.as_bytes(), 5).is_err() {
+                            write_err = true;
+                        }
+                        if driver.write(RP2040_MIDI_I2C_ADDR, cc74_ch2.as_bytes(), 5).is_err() {
+                            write_err = true;
+                        }
+                        if driver.write(RP2040_MIDI_I2C_ADDR, cc11_ch1.as_bytes(), 5).is_err() {
+                            write_err = true;
+                        }
+                        if driver.write(RP2040_MIDI_I2C_ADDR, cc11_ch2.as_bytes(), 5).is_err() {
+                            write_err = true;
+                        }
+                        last_sent_timbre = timbre_u7;
+                    }
+
                     if write_err {
                         rpe_consecutive_errors = rpe_consecutive_errors.saturating_add(1);
                         if rpe_consecutive_errors >= 3 {
@@ -1258,7 +1374,14 @@ fn core1_sensor_dsp_task(
         } else {
             processor.current_volume() as f32 / 127.0
         };
-        let active = !is_muted && processor.is_playing() && vol_norm > 0.05;
+        let timbre_norm = if is_muted {
+            0.0
+        } else {
+            processor.current_timbre() as f32 / 127.0
+        };
+        // Visual tuner is active whenever the pitch hand is present (processor.is_playing()),
+        // regardless of whether volume is 0 or muted!
+        let active = processor.is_playing();
 
         // Musical tuner calculation: find nearest semitone and detune cents in [-50, +50]
         let total_semis = note_u8 as f32 + (cents / 100.0);
@@ -1273,7 +1396,7 @@ fn core1_sensor_dsp_task(
         let octave = (display_note / 12) - 1;
         let freq =
             440.0 * (2.0f32).powf((display_note as f32 - 69.0 + display_cents / 100.0) / 12.0);
-        let expression = vol_norm;
+        let expression = timbre_norm;
 
         // 5. Publish wait-free snapshot for the UI thread
         snapshot.write(concurrency::TunerSnapshot {
