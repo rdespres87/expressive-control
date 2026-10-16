@@ -6,20 +6,22 @@ description = "RP2040-Zero USB-MIDI Class-Compliant coprocessor via I2C target"
 
 [dependencies]
 cortex-m = "0.7"
-cortex-m-rt = "0.7"
+cortex-m-rt = { version = "0.7", features = ["set-vtor"] }
 embassy-embedded-hal = { version = "0.3", default-features = false }
 embassy-sync = { version = "0.6", default-features = false }
 embassy-executor = { version = "0.7", default-features = false, features = ["task-arena-size-16384", "arch-cortex-m", "executor-thread"] }
 embassy-time = { version = "0.4", default-features = false }
-embassy-rp = { version = "0.3", default-features = false, features = ["defmt", "time-driver", "critical-section-impl", "rp2040"] }
+embassy-rp = { version = "0.3", default-features = false, features = ["defmt", "time-driver", "critical-section-impl", "boot2-w25q080", "rp2040", "rt"] }
 embassy-usb = { version = "0.4", default-features = false }
 embassy-futures = { version = "0.1", default-features = false }
 defmt = "0.3"
 defmt-rtt = "0.4"
-panic-probe = { version = "0.3", features = ["print-defmt"] }
 heapless = { version = "0.8", default-features = false }
 
 [profile.release]
 debug = 2
 opt-level = "s"
-lto = true
+lto = false
+
+[target.thumbv6m-none-eabi.dependencies]
+rp2040-hal = { version = "0.12.0", default-features = false }
