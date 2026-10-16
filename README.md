@@ -52,11 +52,11 @@ The Core is strictly `#![no_std]`, independent of hardware. Host platforms (PC S
 - **Slint Dual-View Interface**:
   - **Master View**: Interactive control for Root note, Musical Scale, Octave, Pitch Bend range, Pitch Correction strength, Filter Speed, Language toggle (`[ FR / EN ]`), and dynamic Crate Version badge (`v0.1.0`).
   - **Tuner View**: Subpixel-rasterized high-accuracy Strobe Tuner gauge with dual-needle frequency tracking.
-- **Front Panel I/O (Waveshare MCP23017 @ `0x20`)**:
-  - Rotary encoder with detent filtering for UI navigation.
-  - Tactile buttons (Octave +, Octave -, Mute).
-  - Hardware `XSHUT` control for sequential boot of dual ToF sensors (`0x30` / `0x31`).
-  - Resilient hardware fallback: operates cleanly if expander or sensors are absent.
+- **Front Panel I/O & ToF Reset (RP2040-Zero @ `0x40`)**:
+  - Rotary encoder EC11 with 1ms quadrature decoding and detent filtering for Slint UI navigation (`GP6..GP8`).
+  - Tactile buttons with 3-sample integrator debouncing (Octave +, Octave -, Mute on `GP14`, `GP15`, `GP26`).
+  - Hardware `XSHUT` control for sequential boot of dual ToF sensors (`GP2` / `GP3` -> `0x30` / `0x31`).
+  - *Note:* The external MCP23017 expander has been completely eliminated in favor of the RP2040-Zero.
 
 ### 3. Auxiliary RP2040-Zero USB-MIDI Coprocessor & Hot-Plug Architecture
 - **Why a Coprocessor?** The onboard USB-C port of the CrowPanel 5.0" is hardwired to a CH340G USB-UART bridge (`GPIO 43/44`). To provide true Class-Compliant USB-MIDI without hardware conflict or breaking firmware flashing, a **Waveshare RP2040-Zero** acts as an I2C Target (`0x40`) USB-MIDI bridge.

@@ -46,13 +46,12 @@
     - 3 inputs for rotary encoder (Phase A, Phase B, Switch click)
     - 3 inputs for tactile control buttons
   - Auxiliary USB-MIDI interface selection: **RP2040-Zero** coprocessor configured as an I2C Target (@ `0x40`) / USB-MIDI Class-Compliant endpoint.
-- [x] **Generic MCP23017 Expander & Composable Driver Architecture**:
-  - Implement a generic, reusable MCP23017 driver on I2C (`0x20`) (`mcp23017.rs`).
-  - Implement standalone composable peripheral drivers: `DebouncedButton`, `RotaryEncoder` (Gray-code quadrature with detent filter).
-  - Implement sequential dual ToF boot controller (`XSHUT` lines on GPA0/GPA1 to re-address sensors to `0x30` and `0x31`).
-  - Implement Theremin front-panel driver composing buttons (Octave +, Octave -, Mute) and rotary encoder (UI navigation).
-  - Implement resilient hardware-absent fallback with Slint UI warning banner.
-- [x] **RP2040-Zero Inter-MCU Protocol**: Validated I2C Target link (Slave @ `0x40`) at 400 kHz to prevent hardware UART0 / CH340G bus contention.
+- [x] **Front-Panel & ToF Centralization onto RP2040-Zero (MCP23017 Eliminated)**:
+  - Eliminated external MCP23017 IO expander, removing `0x20` from the I2C bus and reducing BOM/wiring.
+  - Centralized 2× ToF `XSHUT` outputs (`GP2`, `GP3`), 3× EC11 rotary encoder inputs (`GP6..GP8`), and 3× tactile buttons (`GP14`, `GP15`, `GP26`) onto RP2040-Zero edge pins.
+  - Sub-microsecond quadrature decoding and 1ms button debouncing executed on RP2040 with zero ESP32 I2C overhead.
+  - Implemented bidirectional collision-proof I2C protocol: `0x10` (`CMD_READ_INPUTS`) returning 4-byte atomic `RpeInputReport`, `0x20` (`CMD_SET_XSHUT`) controlling ToF enable lines, and unhampered 4-byte real-time USB-MIDI packets (`CIN 0x08..0x0E`).
+  - Re-exported generic `RotaryEncoder` and `DebouncedButton` drivers in `expressive-core::input`.
 - [x] **Dual-Core Asynchronous Decoupling (Real-Time Sensor & 60 FPS UI)**:
   - Pin sensor polling (GT911 touch, MCP23017, ToF ranging) and musical DSP to **Core 1** (`APP_CPU`) at 100 Hz (10ms), isolated from LCD VSYNC.
   - Pin Slint UI and LCD RGB DMA flush to **Core 0** (`PRO_CPU`) at 60 FPS.
@@ -89,6 +88,10 @@
   - Dedicate persistent storage in ESP32-S3 `nvs` partition (`0x9000`), strictly isolated from the application code partition (`0x10000`) so firmware updates never erase user configurations.
   - Implement active state auto-save at power-down and transparent migration fallback to hardcoded factory presets (`ROM`).
   - Web Flasher safeguard: transition from monolithic `0x0000` image (`theremin-factory.bin`) to segmented write (`app.bin` @ `0x10000`) so web updates preserve existing musician NVS blocks.
+- [x] **Left Hand (MG) Auto-Silence on Hand Absence**:
+  - When left hand is pulled away from the volume ToF (`status != Valid` or `d > 800`), decay/reset volume to 0 (hard silence) after debounce timeout (~100-150ms) instead of holding the last measured position.
+- [ ] **Distance Sensitivity & Deadzone Calibration**:
+  - Fine-tune distance boundaries and curves (MG volume 20–280 mm, timbre CC74 280–480 mm, MD pitch 20–600 mm) and integrate zero-point user calibration.
 
 ### System, Deployment & Tools
 - [x] **Firmware Update Strategy (Unified CrowPanel USB -> RP2040 I2C ISP)**:
